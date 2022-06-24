@@ -3,28 +3,36 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-22.05";
-    flake-utils.url = "github:numtide/flake-utils";
+    utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
+  outputs = { self, nixpkgs, utils }:
+    let
+      eachDefaultSystemMap = utils.lib.eachSystemMap utils.lib.defaultSystems;
+    in {
+      packages = eachDefaultSystemMap ( system: rec {
+        snapraid-runner =
+          with import nixpkgs { inherit system; };
+          with pkgs.python3Packages;
+          buildPythonApplication {
+            pname = "snapraid-runner";
+            version = "1.0";
 
-        app = with pkgs.python3Packages; buildPythonApplication {
-          pname = "snapraid-runenr";
-          version = "1.0";
+            propagatedBuildInputs = [ apprise ];
 
-          propagatedBuildInputs = [ apprise ];
+            src = ./.;
+          };
+        default = snapraid-runner;
+      } );
 
-          src = ./.;
-        };
+      overlays.snapraid-runner = final: prev: {
+        inherit (self.packages.${final.system}) snapraid-runner;
+      };
+      overlays.default = self.overlays.snapraid-runner;
 
-        packageName = "snapraid-runner";
-      in {
-        packages.${packageName} = app;
-
-        defaultPackage = self.packages.${system}.${packageName};
-      });
+      nixosModules.snapraid-runner = { ... }: {
+        nixpkgs.overlays = self.overlays.snapraid-runner;
+      };
+      nixosModules.default = self.nixosModules.snapraid-runner;
+    };
 }
-
