@@ -9,7 +9,9 @@
   outputs = { self, nixpkgs, utils }: {
     packages = utils.lib.eachDefaultSystemMap ( system: rec {
       snapraid-runner =
-        with import nixpkgs { inherit system; };
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
         with pkgs.python3Packages;
         buildPythonApplication {
           pname = "snapraid-runner";
