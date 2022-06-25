@@ -7,5 +7,5 @@ setup(name='snapraid-runner',
       # Modules to import from other scripts:
       packages=find_packages(),
       # Executables
-      scripts=["snapraid-runner.py"],
+      scripts=["bin/snapraid-runner"],
      )

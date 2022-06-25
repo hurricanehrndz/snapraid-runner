@@ -285,7 +285,3 @@ def run():
 
     logging.info("All done")
     finish(True)
-
-
-main()
-

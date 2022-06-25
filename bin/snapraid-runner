@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+
+import snapraid_runner
+
+snapraid_runner.main()
