@@ -102,9 +102,7 @@ in
         snapraid-runner
       ];
 
-      etc."snapraid-runner.conf".text = ''
-        test
-      '';
+      etc."snapraid-runner.conf".text = generators.toINI {} { snapraid = cfg.snapraid; };
     };
 
   };
