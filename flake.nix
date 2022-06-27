@@ -28,5 +28,8 @@
       inherit (self.packages.${final.system}) snapraid-runner;
     };
     overlays.default = self.overlays.snapraid-runner;
+
+    nixosModules.snapraid-runner = import ./modules/snapraid-runner.nix;
+    nixosModules.default = self.nixosModules.snapraid-runner;
   };
 }
