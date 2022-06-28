@@ -67,6 +67,15 @@ in
         description = "set to false to get full programm output";
         type = bool;
       };
+      config = mkOption {
+        default = "/etc/snapraid-runner.apprise.yaml";
+        example = "/run/agenix/snapraid-runner.apprise.yaml";
+        description = ''
+          Python Apprise config path.
+          https://github.com/caronc/apprise/wiki/config_yaml
+        '';
+        type = path;
+      };
     };
 
     scrub = {
@@ -114,7 +123,7 @@ in
         "snapraid-runner.conf".text = generators.toINI {} {
           snapraid = cfg.snapraid;
           logging = cfg.logging;
-          notification = cfg.notification // { config = "/etc/snapraid-runner.apprise.yaml"; };
+          notification = cfg.notification;;
           scrub = cfg.scrub;
         };
       } // optionalAttrs (cfg.apprise-conf != null) {
