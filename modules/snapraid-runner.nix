@@ -108,11 +108,15 @@ in
         snapraid-runner
       ];
 
-      etc."snapraid-runner.conf".text = generators.toINI {} {
-        snapraid = cfg.snapraid;
-        logging = cfg.logging;
-        notification = cfg.notification // { config = "/etc/snapraid-runner.apprise.yaml"; };
-        scrub = cfg.scrub;
+      etc = {
+        "snapraid-runner.conf".text = generators.toINI {} {
+          snapraid = cfg.snapraid;
+          logging = cfg.logging;
+          notification = cfg.notification // { config = "/etc/snapraid-runner.apprise.yaml"; };
+          scrub = cfg.scrub;
+        };
+      } // optionalAttrs (cfg.apprise-conf != null) {
+        "snapraid-runner.apprise.yaml".text = generators.toYAML cfg.apprise-conf;
       };
     };
   };
