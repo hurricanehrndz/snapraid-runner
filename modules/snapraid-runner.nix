@@ -88,11 +88,13 @@ in
     apprise-conf = mkOption{
       type = nullOr attrs;
       default = null;
-      example = {
-        urls = [
-          "json://localhost"
-        ];
-      };
+      example = literalExpression ''
+        {
+          "urls" = [
+            "json://localhost"
+          ];
+        }
+      '';
       description = ''
         Appprise yaml contents.
         Will automatically get converted to yaml.
