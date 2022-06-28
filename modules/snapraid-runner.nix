@@ -175,8 +175,11 @@ in
           ReadWritePaths =
             # sync, diff, scrub requires access to directories containing content files
             # to remove them if they are stale
+            let
+              contentDirs = map dirOf config.snapraid.contentFiles;
+            in
             unique (
-              attrValues config.snapraid.dataDisks
+              attrValues config.snapraid.dataDisks ++ contentDirs
             );
         };
       };
