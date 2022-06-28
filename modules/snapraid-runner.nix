@@ -129,7 +129,7 @@ in
         "snapraid-runner.conf".text = generators.toINI {} {
           snapraid = cfg.snapraid;
           logging = cfg.logging;
-          notification = cfg.notification;;
+          notification = cfg.notification;
           scrub = cfg.scrub;
         };
       } // optionalAttrs (cfg.apprise-conf != null) {
