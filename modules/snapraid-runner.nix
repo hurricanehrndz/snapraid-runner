@@ -101,26 +101,19 @@ in
     };
   };
 
-  config = mkIf cfg.enable (mkMerge [
-    {
-      environment = {
-        systemPackages = with pkgs; [
-          snapraid
-          snapraid-runner
-        ];
+  config = mkIf cfg.enable {
+    environment = {
+      systemPackages = with pkgs; [
+        snapraid
+        snapraid-runner
+      ];
 
-        etc."snapraid-runner.conf".text = generators.toINI {} {
-          snapraid = cfg.snapraid;
-          logging = cfg.logging;
-          notification = cfg.notification // { config = "/etc/snapraid-runner.apprise.yaml"; };
-          scrub = cfg.scrub;
-        };
+      etc."snapraid-runner.conf".text = generators.toINI {} {
+        snapraid = cfg.snapraid;
+        logging = cfg.logging;
+        notification = cfg.notification // { config = "/etc/snapraid-runner.apprise.yaml"; };
+        scrub = cfg.scrub;
       };
-    }
-    (optionalAttrs (cfg.apprise-conf != null) {
-      environment = {
-        etc."snapraid-runner.apprise.yaml".text = generators.toYAML cfg.apprise-conf;
-      };
-    })
-  ]);
+    };
+  };
 }
