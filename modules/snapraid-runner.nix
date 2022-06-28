@@ -176,7 +176,7 @@ in
             # sync, diff, scrub requires access to directories containing content files
             # to remove them if they are stale
             unique (
-              attrValues options.snapraid.dataDisks ++ cfg.logging.file
+              attrValues options.snapraid.dataDisks
             );
         };
       };
