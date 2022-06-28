@@ -20,7 +20,7 @@ in
         default = "/etc/snapraid.conf";
         example = "/etc/snapraid.conf";
         description = "path to the snapraid config to be used";
-        type = str;
+        type = path;
       };
       deletethreshold = mkOption {
         default = 40;
@@ -42,7 +42,7 @@ in
         default = "/var/log/snapraid-runner.log";
         example = "/var/log/snapraid-runner.log";
         description = "logfile to write to, leave empty to disable";
-        type = str;
+        type = path;
       };
       maxsize = mkOption {
         default = 5000;
