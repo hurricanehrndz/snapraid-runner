@@ -179,7 +179,9 @@ in
               contentDirs = map dirOf config.snapraid.contentFiles;
             in
             unique (
-              attrValues config.snapraid.dataDisks ++ contentDirs
+              attrValues config.snapraid.dataDisks ++ contentDirs ++ config.snapraid.parityFiles ++ [
+                cfg.logging.file
+              ]
             );
         };
       };
