@@ -8,6 +8,12 @@ in
 {
   options.snapraid-runner = with types; {
     enable = mkEnableOption "snapraid-runner service";
+    interval = mkOption {
+      default = "01:00";
+      example = "daily";
+      description = "How often to run <command>snapraid-runner</command>.";
+      type = str;
+    };
     # snapraid options
     snapraid = {
       executable = mkOption {
@@ -128,6 +134,53 @@ in
         };
       } // optionalAttrs (cfg.apprise-conf != null) {
         "snapraid-runner.apprise.yaml".text = generators.toYAML {} cfg.apprise-conf;
+      };
+    };
+
+    systemd.services = {
+      snapraid-runner = {
+        description = "Diff, Sync and Scrub the SnapRAID array via snapraid-runner";
+        startAt = cfg.interval;
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.snapraid-runner}/bin/snapraid-runner -c /etc/snapraid-runner.conf";
+          Nice = 19;
+          IOSchedulingPriority = 7;
+          CPUSchedulingPolicy = "batch";
+
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectClock = true;
+          ProtectControlGroups = true;
+          ProtectHostname = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          RestrictAddressFamilies = "none";
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          SystemCallArchitectures = "native";
+          SystemCallFilter = "@system-service";
+          SystemCallErrorNumber = "EPERM";
+          CapabilityBoundingSet = "CAP_DAC_OVERRIDE" + " CAP_FOWNER";
+
+          ProtectSystem = "strict";
+          ProtectHome = "read-only";
+          ReadWritePaths =
+            # sync, diff, scrub requires access to directories containing content files
+            # to remove them if they are stale
+            let
+              contentDirs = map dirOf config.snapraid.contentFiles;
+            in
+            unique (
+              attrValues config.snapraid.dataDisks ++ config.snapraid.parityFiles ++ contentDirs ++ cfg.logging.file
+            );
+        };
+        snapraid-scrub.enable = mkForce false;
+        snapraid-sync.enable = mkForce false;
       };
     };
   };
