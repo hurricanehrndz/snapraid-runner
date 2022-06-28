@@ -56,25 +56,16 @@ in
     notification = {
       enable = mkEnableOption "snapraid-runner notifications";
       sendon = mkOption {
-        default = [
-          "success"
-          "error"
-        ];
-        example = [
-          "success"
-          "error"
-        ];
+        default = "success,error";
+        example = "success,error";
         description = "when to send a notificariton on, comma-separated list of [success, error]";
-        type = listOf str;
+        type = str;
       };
       short = mkOption {
         default = true;
         example = false;
         description = "set to false to get full programm output";
         type = bool;
-      };
-      config = mkOption {
-
       };
     };
 
@@ -84,7 +75,7 @@ in
         default = "12";
         example = "12";
         description = "scrub plan - either a percentage or one of [bad, new, full]";
-        type = string;
+        type = str;
       };
       older-than = mkOption {
         default = 10;
@@ -93,17 +84,43 @@ in
         type = int;
       };
     };
-  };
 
-  config = mkIf cfg.enable {
-    environment = {
-      systemPackages = with pkgs; [
-        snapraid
-        snapraid-runner
-      ];
-
-      etc."snapraid-runner.conf".text = generators.toINI {} { snapraid = cfg.snapraid; };
+    apprise-conf = mkOption{
+      type = nullOr attrs;
+      default = null;
+      example = {
+        urls = [
+          "json://localhost"
+        ];
+      };
+      description = ''
+        Appprise yaml contents.
+        Will automatically get converted to yaml.
+        see: https://github.com/caronc/apprise/wiki/config_yaml";
+      '';
     };
-
   };
+
+  config = mkIf cfg.enable (mkMerge [
+    {
+      environment = {
+        systemPackages = with pkgs; [
+          snapraid
+          snapraid-runner
+        ];
+
+        etc."snapraid-runner.conf".text = generators.toINI {} {
+          snapraid = cfg.snapraid;
+          logging = cfg.logging;
+          notification = cfg.notification // { config = "/etc/snapraid-runner.apprise.yaml"; };
+          scrub = cfg.scrub;
+        };
+      };
+    }
+    (optionalAttrs (cfg.apprise-conf != null) {
+      environment = {
+        etc."snapraid-runner.apprise.yaml".text = generators.toYAML cfg.apprise-conf;
+      };
+    })
+  ]);
 }
