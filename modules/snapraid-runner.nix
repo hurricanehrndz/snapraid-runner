@@ -138,6 +138,9 @@ in
     };
 
     systemd.services = {
+      # disable snapraid services
+      snapraid-scrub.enable = mkForce false;
+      snapraid-sync.enable = mkForce false;
       snapraid-runner = {
         description = "Diff, Sync and Scrub the SnapRAID array via snapraid-runner";
         startAt = cfg.interval;
@@ -179,8 +182,6 @@ in
               attrValues config.snapraid.dataDisks ++ config.snapraid.parityFiles ++ contentDirs ++ cfg.logging.file
             );
         };
-        snapraid-scrub.enable = mkForce false;
-        snapraid-sync.enable = mkForce false;
       };
     };
   };
