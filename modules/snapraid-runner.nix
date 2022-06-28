@@ -118,7 +118,7 @@ in
           scrub = cfg.scrub;
         };
       } // optionalAttrs (cfg.apprise-conf != null) {
-        "snapraid-runner.apprise.yaml".text = generators.toYAML cfg.apprise-conf;
+        "snapraid-runner.apprise.yaml".text = generators.toJSON cfg.apprise-conf;
       };
     };
   };
