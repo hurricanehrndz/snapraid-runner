@@ -172,12 +172,6 @@ in
 
           ProtectSystem = "strict";
           ProtectHome = "read-only";
-          ReadWritePaths =
-            # sync, diff, scrub requires access to directories containing content files
-            # to remove them if they are stale
-            unique (
-              attrValues options.snapraid.dataDisks
-            );
         };
       };
     };
