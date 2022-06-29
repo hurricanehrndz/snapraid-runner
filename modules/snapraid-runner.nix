@@ -162,7 +162,6 @@ in
           ProtectKernelLogs = true;
           ProtectKernelModules = true;
           ProtectKernelTunables = true;
-          RestrictAddressFamilies = "none";
           RestrictNamespaces = true;
           RestrictRealtime = true;
           RestrictSUIDSGID = true;
