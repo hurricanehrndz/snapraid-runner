@@ -45,10 +45,10 @@ in
     # logging options
     logging = {
       file = mkOption {
-        default = null;
+        default = "";
         example = "/var/log/snapraid-runner.log";
         description = "logfile to write to, leave empty to disable";
-        type = nullOr path;
+        type = str;
       };
       maxsize = mkOption {
         default = 5000;
@@ -180,7 +180,7 @@ in
             in
             unique (
               attrValues config.snapraid.dataDisks ++ contentDirs ++ config.snapraid.parityFiles ++ [
-                cfg.logging.file
+                dirOf cfg.logging.file
               ]
             );
         };
