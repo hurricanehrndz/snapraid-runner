@@ -168,7 +168,7 @@ in
           SystemCallArchitectures = "native";
           SystemCallFilter = "@system-service";
           SystemCallErrorNumber = "EPERM";
-          CapabilityBoundingSet = "CAP_DAC_OVERRIDE" + " CAP_FOWNER";
+          CapabilityBoundingSet = "CAP_DAC_OVERRIDE CAP_FOWNER";
 
           ProtectSystem = "strict";
           ProtectHome = "read-only";
