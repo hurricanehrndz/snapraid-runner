@@ -23,7 +23,7 @@ in
         description = "path to the snapraid executable";
         type = str;
       };
-      conf = mkOption {
+      config = mkOption {
         default = "/etc/snapraid.conf";
         example = "/etc/snapraid.conf";
         description = "path to the snapraid config to be used";
