@@ -4,6 +4,7 @@ with lib;
 
 let
   cfg = config.snapraid-runner;
+  loggingOption = if cfg.logging.file == null then overrideExisting cfg.logging { file = ""; } else cfg.logging;
 in
 {
   options.snapraid-runner = with types; {
@@ -45,10 +46,10 @@ in
     # logging options
     logging = {
       file = mkOption {
-        default = "";
+        default = null;
         example = "/var/log/snapraid-runner.log";
         description = "logfile to write to, leave empty to disable";
-        type = str;
+        type = nullOr path;
       };
       maxsize = mkOption {
         default = 5000;
@@ -128,7 +129,7 @@ in
       etc = {
         "snapraid-runner.conf".text = generators.toINI {} {
           snapraid = cfg.snapraid;
-          logging = cfg.logging;
+          logging = loggingOption;
           notification = cfg.notification;
           scrub = cfg.scrub;
         };
@@ -179,9 +180,11 @@ in
               contentDirs = map dirOf config.snapraid.contentFiles;
             in
             unique (
-              attrValues config.snapraid.dataDisks ++ contentDirs ++ config.snapraid.parityFiles ++ [
-                dirOf cfg.logging.file
-              ]
+              attrValues config.snapraid.dataDisks ++ contentDirs ++ config.snapraid.parityFiles ++ (
+                optional (cfg.logging.file != null) [
+                  dirOf cfg.logging.file
+                ]
+              )
             );
         };
       };
