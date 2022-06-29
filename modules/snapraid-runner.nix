@@ -45,10 +45,10 @@ in
     # logging options
     logging = {
       file = mkOption {
-        default = "/var/log/snapraid-runner.log";
+        default = null;
         example = "/var/log/snapraid-runner.log";
         description = "logfile to write to, leave empty to disable";
-        type = path;
+        type = nullOr path;
       };
       maxsize = mkOption {
         default = 5000;
