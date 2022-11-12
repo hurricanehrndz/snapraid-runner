@@ -86,7 +86,12 @@ in
     };
 
     scrub = {
-      enable = mkEnableOption "snapraid-runner scrub function";
+      enabled = mkOption {
+        default = false;
+        example = false;
+        description = "set to true to run scrub after sync";
+        type = bool;
+      };
       plan = mkOption {
         default = "12";
         example = "12";
