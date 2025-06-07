@@ -181,7 +181,7 @@ in
             # sync, diff, scrub requires access to directories containing content files
             # to remove them if they are stale
             let
-              contentDirs = map dirOf config.snapraid.contentFiles;
+              contentDirs = map dirOf config.services.snapraid.contentFiles;
             in
             unique (
               attrValues config.services.snapraid.dataDisks ++ contentDirs ++ config.snapraid.parityFiles ++ (
