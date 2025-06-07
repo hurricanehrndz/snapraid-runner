@@ -2,7 +2,7 @@
   description = "Snapraid runner script to run sync and scrub";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-22.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     utils.url = "github:numtide/flake-utils";
   };
 
@@ -15,7 +15,7 @@
         with pkgs.python3Packages;
         buildPythonApplication {
           pname = "snapraid-runner";
-          version = "1.0";
+          version = "1.1";
 
           propagatedBuildInputs = [ apprise ];
 
