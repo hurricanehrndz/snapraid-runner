@@ -1,13 +1,17 @@
-{ config, options, lib, pkgs, ... }:
-
-with lib;
-
-let
-  cfg = config.snapraid-runner;
-  loggingOption = if cfg.logging.file == null then overrideExisting cfg.logging { file = ""; } else cfg.logging;
-in
 {
-  options.snapraid-runner = with types; {
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+with lib; let
+  cfg = config.services.snapraid-runner;
+  loggingOption =
+    if cfg.logging.file == null
+    then overrideExisting cfg.logging {file = "";}
+    else cfg.logging;
+in {
+  options.services.snapraid-runner = with types; {
     enable = mkEnableOption "snapraid-runner service";
     interval = mkOption {
       default = "01:00";
@@ -106,7 +110,7 @@ in
       };
     };
 
-    apprise-conf = mkOption{
+    apprise-conf = mkOption {
       type = nullOr attrs;
       default = null;
       example = literalExpression ''
@@ -131,16 +135,18 @@ in
         snapraid-runner
       ];
 
-      etc = {
-        "snapraid-runner.conf".text = generators.toINI {} {
-          snapraid = cfg.snapraid;
-          logging = loggingOption;
-          notification = cfg.notification;
-          scrub = cfg.scrub;
+      etc =
+        {
+          "snapraid-runner.conf".text = generators.toINI {} {
+            snapraid = cfg.snapraid;
+            logging = loggingOption;
+            notification = cfg.notification;
+            scrub = cfg.scrub;
+          };
+        }
+        // optionalAttrs (cfg.apprise-conf != null) {
+          "snapraid-runner.apprise.yaml".text = generators.toYAML {} cfg.apprise-conf;
         };
-      } // optionalAttrs (cfg.apprise-conf != null) {
-        "snapraid-runner.apprise.yaml".text = generators.toYAML {} cfg.apprise-conf;
-      };
     };
 
     systemd.services = {
@@ -183,13 +189,17 @@ in
             let
               contentDirs = map dirOf config.services.snapraid.contentFiles;
             in
-            unique (
-              attrValues config.services.snapraid.dataDisks ++ contentDirs ++ config.snapraid.parityFiles ++ (
-                optional (cfg.logging.file != null) [
-                  dirOf cfg.logging.file
-                ]
-              )
-            );
+              unique (
+                attrValues config.services.snapraid.dataDisks
+                ++ contentDirs
+                ++ config.services.snapraid.parityFiles
+                ++ (
+                  optional (cfg.logging.file != null) [
+                    dirOf
+                    cfg.logging.file
+                  ]
+                )
+              );
         };
       };
     };
