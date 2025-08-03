@@ -17,6 +17,9 @@
           pname = "snapraid-runner";
           version = "1.1";
 
+          pyproject = true;
+          build-system = [ setuptools ];
+
           propagatedBuildInputs = [ apprise ];
 
           src = ./.;
