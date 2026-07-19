@@ -1,0 +1,14 @@
+name: CI
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      # Runs the full flake check: package build (which runs the unit tests),
+      # treefmt formatting check, pre-commit hooks, and NixOS module eval.
+      - run: nix flake check -L

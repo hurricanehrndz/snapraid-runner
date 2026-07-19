@@ -4,13 +4,59 @@
   pkgs,
   ...
 }:
-with lib; let
+with lib;
+let
   cfg = config.services.snapraid-runner;
   loggingOption =
-    if cfg.logging.file == null
-    then overrideExisting cfg.logging {file = "";}
-    else cfg.logging;
-in {
+    if cfg.logging.file == null then overrideExisting cfg.logging { file = ""; } else cfg.logging;
+
+  # Shared hardening for both the runner and the weekly-report units. ExecStart
+  # differs, so it is merged in per-service.
+  sharedServiceConfig = {
+    Type = "oneshot";
+    Nice = 19;
+    IOSchedulingPriority = 7;
+    CPUSchedulingPolicy = "batch";
+
+    LockPersonality = true;
+    MemoryDenyWriteExecute = true;
+    NoNewPrivileges = true;
+    PrivateTmp = true;
+    ProtectClock = true;
+    ProtectControlGroups = true;
+    ProtectHostname = true;
+    ProtectKernelLogs = true;
+    ProtectKernelModules = true;
+    ProtectKernelTunables = true;
+    RestrictNamespaces = true;
+    RestrictRealtime = true;
+    RestrictSUIDSGID = true;
+    SystemCallArchitectures = "native";
+    SystemCallFilter = "@system-service";
+    SystemCallErrorNumber = "EPERM";
+    CapabilityBoundingSet = "CAP_DAC_OVERRIDE CAP_FOWNER";
+
+    ProtectSystem = "strict";
+    ProtectHome = "read-only";
+    # Creates and keeps /var/lib/snapraid-runner writable (default history dir)
+    # despite ProtectSystem=strict.
+    StateDirectory = "snapraid-runner";
+    ReadWritePaths =
+      # sync, diff, scrub requires access to directories containing content files
+      # to remove them if they are stale
+      let
+        contentDirs = map dirOf config.services.snapraid.contentFiles;
+      in
+      unique (
+        attrValues config.services.snapraid.dataDisks
+        ++ contentDirs
+        ++ config.services.snapraid.parityFiles
+        ++ optional (cfg.logging.file != null) (dirOf cfg.logging.file)
+        ++ optional (cfg.history.file != null) (dirOf cfg.history.file)
+      );
+  };
+in
+{
   options.services.snapraid-runner = with types; {
     enable = mkEnableOption "snapraid-runner service";
     interval = mkOption {
@@ -58,7 +104,7 @@ in {
       maxsize = mkOption {
         default = 5000;
         example = 5000;
-        description = "maximum logfile size in KiB, leave empty for infinit";
+        description = "maximum logfile size in KiB, leave empty for infinite";
         type = int;
       };
     };
@@ -69,13 +115,19 @@ in {
       sendon = mkOption {
         default = "success,error";
         example = "success,error";
-        description = "when to send a notificariton on, comma-separated list of [success, error]";
+        description = "when to send a notification on, comma-separated list of [success, error]";
         type = str;
       };
       short = mkOption {
         default = true;
         example = false;
-        description = "set to false to get full programm output";
+        description = "set to false to get full program output";
+        type = bool;
+      };
+      quiet = mkOption {
+        default = false;
+        example = true;
+        description = "suppress the success notification when a run made no changes (a no-op); failures are always sent";
         type = bool;
       };
       config = mkOption {
@@ -110,6 +162,33 @@ in {
       };
     };
 
+    # run history (JSONL, one record per run; consumed by the weekly report)
+    history = {
+      file = mkOption {
+        default = "/var/lib/snapraid-runner/history.jsonl";
+        example = "/var/lib/snapraid-runner/history.jsonl";
+        description = "append one JSON line per run to this file, leave null to disable. Entries older than 90 days are pruned automatically.";
+        type = nullOr path;
+      };
+    };
+
+    # scheduled weekly report (snapraid-runner --report weekly)
+    report = {
+      enable = mkEnableOption "weekly report";
+      interval = mkOption {
+        default = "Sun 09:00";
+        example = "Sun 09:00";
+        description = "how often to send the weekly report (systemd OnCalendar)";
+        type = str;
+      };
+      scrub-age-warning = mkOption {
+        default = 30;
+        example = 30;
+        description = "warn in the report when the oldest un-scrubbed block is older than this many days. Set to 0 to disable the warning.";
+        type = int;
+      };
+    };
+
     apprise-conf = mkOption {
       type = nullOr attrs;
       default = null;
@@ -135,18 +214,25 @@ in {
         snapraid-runner
       ];
 
-      etc =
-        {
-          "snapraid-runner.conf".text = generators.toINI {} {
-            snapraid = cfg.snapraid;
-            logging = loggingOption;
-            notification = cfg.notification;
-            scrub = cfg.scrub;
+      etc = {
+        "snapraid-runner.conf".text = generators.toINI { } {
+          snapraid = cfg.snapraid;
+          logging = loggingOption;
+          # Python reads `enabled`; the NixOS option is `enable` (convention).
+          notification = removeAttrs cfg.notification [ "enable" ] // {
+            enabled = cfg.notification.enable;
           };
-        }
-        // optionalAttrs (cfg.apprise-conf != null) {
-          "snapraid-runner.apprise.yaml".text = generators.toYAML {} cfg.apprise-conf;
+          scrub = cfg.scrub;
+          # Empty string disables history, matching logging.file null-handling.
+          history.file = if cfg.history.file == null then "" else cfg.history.file;
+          # Only scrub-age-warning is read from [report]; interval/enable
+          # drive the systemd timer, not the Python.
+          report."scrub-age-warning" = cfg.report.scrub-age-warning;
         };
+      }
+      // optionalAttrs (cfg.apprise-conf != null) {
+        "snapraid-runner.apprise.yaml".text = generators.toYAML { } cfg.apprise-conf;
+      };
     };
 
     systemd.services = {
@@ -156,50 +242,17 @@ in {
       snapraid-runner = {
         description = "Diff, Sync and Scrub the SnapRAID array via snapraid-runner";
         startAt = cfg.interval;
-        serviceConfig = {
-          Type = "oneshot";
+        serviceConfig = sharedServiceConfig // {
           ExecStart = "${pkgs.snapraid-runner}/bin/snapraid-runner -c /etc/snapraid-runner.conf";
-          Nice = 19;
-          IOSchedulingPriority = 7;
-          CPUSchedulingPolicy = "batch";
-
-          LockPersonality = true;
-          MemoryDenyWriteExecute = true;
-          NoNewPrivileges = true;
-          PrivateTmp = true;
-          ProtectClock = true;
-          ProtectControlGroups = true;
-          ProtectHostname = true;
-          ProtectKernelLogs = true;
-          ProtectKernelModules = true;
-          ProtectKernelTunables = true;
-          RestrictNamespaces = true;
-          RestrictRealtime = true;
-          RestrictSUIDSGID = true;
-          SystemCallArchitectures = "native";
-          SystemCallFilter = "@system-service";
-          SystemCallErrorNumber = "EPERM";
-          CapabilityBoundingSet = "CAP_DAC_OVERRIDE CAP_FOWNER";
-
-          ProtectSystem = "strict";
-          ProtectHome = "read-only";
-          ReadWritePaths =
-            # sync, diff, scrub requires access to directories containing content files
-            # to remove them if they are stale
-            let
-              contentDirs = map dirOf config.services.snapraid.contentFiles;
-            in
-              unique (
-                attrValues config.services.snapraid.dataDisks
-                ++ contentDirs
-                ++ config.services.snapraid.parityFiles
-                ++ (
-                  optional (cfg.logging.file != null) [
-                    dirOf
-                    cfg.logging.file
-                  ]
-                )
-              );
+        };
+      };
+    }
+    // optionalAttrs cfg.report.enable {
+      snapraid-runner-report = {
+        description = "Send the SnapRAID weekly report via snapraid-runner";
+        startAt = cfg.report.interval;
+        serviceConfig = sharedServiceConfig // {
+          ExecStart = "${pkgs.snapraid-runner}/bin/snapraid-runner -c /etc/snapraid-runner.conf --report weekly";
         };
       };
     };
