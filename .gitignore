@@ -1,5 +1,6 @@
 *.yml
 *.yaml
+!.github/workflows/*.yml
 *.log
 snapraid-runner.conf
 # Created by https://www.toptal.com/developers/gitignore/api/python

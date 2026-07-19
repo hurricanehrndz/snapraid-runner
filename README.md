@@ -246,3 +246,16 @@ nix develop
 
 Or, with [direnv](https://direnv.net/), just `cd` into the repo — the committed
 `.envrc` (`use flake`) loads the same shell automatically after `direnv allow`.
+Entering the shell also installs a [git-hooks](https://github.com/cachix/git-hooks.nix)
+pre-commit hook that runs the formatter.
+
+Formatting is handled by [treefmt](https://github.com/numtide/treefmt-nix)
+(nixfmt, ruff, taplo, yamlfmt):
+
+```sh
+nix fmt
+```
+
+`nix flake check` runs the whole gate — package build, the unit tests, the
+formatting check, and a NixOS module eval — and is what CI runs on every push.
+The tests can also be run directly with `python -m unittest discover -s tests`.
