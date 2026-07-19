@@ -18,7 +18,7 @@
         with python3Packages;
         buildPythonApplication {
           pname = "snapraid-runner";
-          version = "1.3";
+          version = "2.0";
 
           pyproject = true;
           build-system = [ setuptools ];
