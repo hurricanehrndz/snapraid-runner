@@ -2,7 +2,7 @@
   description = "Snapraid runner script to run sync and scrub";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     utils.url = "github:numtide/flake-utils";
   };
 
@@ -15,7 +15,7 @@
         with pkgs.python3Packages;
         buildPythonApplication {
           pname = "snapraid-runner";
-          version = "1.1";
+          version = "1.2";
 
           pyproject = true;
           build-system = [ setuptools ];
@@ -26,6 +26,18 @@
         };
       default = snapraid-runner;
     } );
+
+    devShells = utils.lib.eachDefaultSystemMap ( system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+      in {
+        default = pkgs.mkShell {
+          packages = [
+            (pkgs.python3.withPackages (ps: [ ps.apprise ]))
+            pkgs.snapraid
+          ];
+        };
+      } );
 
     overlays.snapraid-runner = final: prev: {
       inherit (self.packages.${final.system}) snapraid-runner;

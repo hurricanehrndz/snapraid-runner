@@ -27,9 +27,6 @@ short = true
 ; https://github.com/caronc/apprise/wiki/config_yaml
 config = apprise.yml
 
-; maximum email size in KiB
-maxsize = 500
-
 [scrub]
 ; set to true to run scrub after sync
 enabled = false

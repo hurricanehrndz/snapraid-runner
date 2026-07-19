@@ -58,7 +58,7 @@ in {
       maxsize = mkOption {
         default = 5000;
         example = 5000;
-        description = "maximum logfile size in KiB, leave empty for infinit";
+        description = "maximum logfile size in KiB, leave empty for infinite";
         type = int;
       };
     };
@@ -69,13 +69,13 @@ in {
       sendon = mkOption {
         default = "success,error";
         example = "success,error";
-        description = "when to send a notificariton on, comma-separated list of [success, error]";
+        description = "when to send a notification on, comma-separated list of [success, error]";
         type = str;
       };
       short = mkOption {
         default = true;
         example = false;
-        description = "set to false to get full programm output";
+        description = "set to false to get full program output";
         type = bool;
       };
       config = mkOption {
@@ -140,7 +140,10 @@ in {
           "snapraid-runner.conf".text = generators.toINI {} {
             snapraid = cfg.snapraid;
             logging = loggingOption;
-            notification = cfg.notification;
+            # Python reads `enabled`; the NixOS option is `enable` (convention).
+            notification =
+              removeAttrs cfg.notification ["enable"]
+              // {enabled = cfg.notification.enable;};
             scrub = cfg.scrub;
           };
         }
@@ -193,12 +196,7 @@ in {
                 attrValues config.services.snapraid.dataDisks
                 ++ contentDirs
                 ++ config.services.snapraid.parityFiles
-                ++ (
-                  optional (cfg.logging.file != null) [
-                    dirOf
-                    cfg.logging.file
-                  ]
-                )
+                ++ optional (cfg.logging.file != null) (dirOf cfg.logging.file)
               );
         };
       };

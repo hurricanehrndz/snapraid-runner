@@ -1,64 +1,167 @@
-# Snapraid Runner Script
+# snapraid-runner
 
-This script runs snapraid and sends its output to the console, a log file and
-via email. All this is configurable.
+A small tool that runs a SnapRAID maintenance cycle and reports the result.
+On each run it:
 
-It can be run manually, but its main purpose is to be run via cronjob/windows
-scheduler.
+1. Runs `snapraid diff` and counts how many files were added, removed, moved or
+   modified.
+2. Aborts before touching parity if the number of deleted files exceeds a
+   configurable **delete threshold** (a guard against accidental mass deletion).
+3. Runs `snapraid sync` when there are changes.
+4. Optionally runs `snapraid scrub` afterwards.
+5. Optionally runs `snapraid touch` first.
 
-It supports Windows, Linux and macOS and requires at least python3.7.
+All output goes to the console and, optionally, to a size-limited rotating log
+file. When enabled, a notification is sent through
+[Apprise](https://github.com/caronc/apprise) after each run (or only on
+failures).
 
-## How to use
-* If you don’t already have it, download and install
-  [the latest python version](https://www.python.org/downloads/).
-* Download [the latest release](https://github.com/Chronial/snapraid-runner/releases)
-  of this script and extract it anywhere or clone this repository via git.
-* Copy/rename the `snapraid-runner.conf.example` to `snapraid-runner.conf` and
-  edit its contents. You need to at least configure `snapraid.executable` and
-  `snapraid.config`.
-* Run the script via `python3 snapraid-runner.py` on Linux or
- `py -3 snapraid-runner.py` on Windows.
+It is meant to be run on a schedule — via the bundled NixOS module, a systemd
+timer, or cron.
 
-## Features
-* Runs `diff` before `sync` to see how many files were deleted and aborts if
-  that number exceeds a set threshold.
-* Can create a size-limited rotated logfile.
-* Can send notification emails after each run or only for failures.
-* Can run `scrub` after `sync`
+This is a fork of [Chronial/snapraid-runner](https://github.com/Chronial/snapraid-runner).
+It has diverged: it is now a proper Python package with a `snapraid-runner`
+entry point, uses Apprise for notifications instead of SMTP email, and ships a
+Nix flake with a package, overlay, dev shell and a NixOS module. All credit for
+the original tool goes to the upstream project.
 
-## Scope of this project and contributions
-Snapraid-runner is supposed to be a small tool with clear focus. It should not
-have any dependencies to keep installation trivial. I always welcome bugfixes
-and contributions, but be aware that I will not merge new features that I feel
-do not fit the core purpose of this tool.
+## Usage on NixOS (flake)
 
-I keep the PRs for features I do not plan on merging open, so if there's a
-feature you are missing, you can have a look
-[at the open PRs](https://github.com/Chronial/snapraid-runner/pulls).
+Add this repository as a flake input and pull in the overlay and/or the NixOS
+module:
 
-## Changelog
-### Unreleased
-* Add --ignore-deletethreshold (by exterrestris, #25)
-* Add support for scrub --plan, replacing --percentage (thanks to fmoledina)
-* Remove snapraid progress output. Was accidentially introduced with python3
-  support.
+```nix
+{
+  inputs.snapraid-runner.url = "github:hurricanehrndz/snapraid-runner";
 
-### v0.5 (26 Feb 2021)
-* Remove (broken) python2 support
-* Fix snapraid output encoding handling (by hyyz17200, #31)
-* Fix log rotation (by ptoulouse, #36)
+  outputs = { self, nixpkgs, snapraid-runner, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      modules = [
+        # makes pkgs.snapraid-runner available
+        { nixpkgs.overlays = [ snapraid-runner.overlays.default ]; }
+        snapraid-runner.nixosModules.snapraid-runner
+        ./configuration.nix
+      ];
+    };
+  };
+}
+```
 
-### v0.4 (17 Aug 2019)
-* Add compatibility with python3 (by reed-jones)
-* Add support for running `snapraid touch` (by ShoGinn, #11)
-* Add SMTP TLS support
+Then configure the service. The module builds on the upstream nixpkgs
+`services.snapraid` module for the array layout (`dataDisks`, `contentFiles`,
+`parityFiles`) — those are read to compute the systemd service's writable
+paths, so configure `services.snapraid` as usual and let this module drive the
+runner:
 
-### v0.3 (20 Jul 2017)
-* Limit size of sent emails
+```nix
+{
+  services.snapraid-runner = {
+    enable = true;
+    interval = "daily";               # systemd OnCalendar; default "01:00"
 
-### v0.2 (27 Apr 2015)
-* Fix compatibility with Snapraid 8.0
-* Allow disabling of scrub from command line
+    snapraid = {
+      # executable defaults to ${pkgs.snapraid}/bin/snapraid
+      config = "/etc/snapraid.conf";
+      deletethreshold = 40;           # -1 to disable
+      touch = false;
+    };
 
-### v0.1 (16 Feb 2014)
-* Initial release
+    logging = {
+      file = "/var/log/snapraid-runner.log";  # null (default) disables file logging
+      maxsize = 5000;                          # KiB
+    };
+
+    scrub = {
+      enabled = true;
+      plan = "12";                    # percentage, or one of: bad, new, full
+      older-than = 10;                # days; only used with percentage plans
+    };
+
+    notification = {
+      enable = true;
+      sendon = "success,error";       # comma-separated: success, error
+      short = true;                   # false to include full program output
+      # config = path to the Apprise YAML; defaults to
+      #   /etc/snapraid-runner.apprise.yaml
+    };
+
+    # Optional: have the module write the Apprise YAML for you.
+    # If you set this, point notification.config at the same path (its default
+    # already matches). Otherwise manage the Apprise file yourself.
+    apprise-conf = {
+      urls = [ "pbul://MY-KEY" ];
+    };
+  };
+}
+```
+
+The generated systemd service runs as a hardened `oneshot` unit (strict
+`ProtectSystem`, restricted syscalls, minimal capabilities) with write access
+limited to the SnapRAID data/content/parity directories and the log directory.
+Enabling the module also disables the stock `snapraid-sync` and `snapraid-scrub`
+units so the runner is the single entry point.
+
+## Usage without Nix
+
+Requires Python >= 3.9 and the `snapraid` binary on `PATH`.
+
+```sh
+# install from a checkout of this repo
+pip install .
+
+# create your config
+cp snapraid-runner.conf.example snapraid-runner.conf
+# edit it — at minimum set snapraid.executable and snapraid.config
+$EDITOR snapraid-runner.conf
+
+# run
+snapraid-runner -c snapraid-runner.conf
+```
+
+Schedule it with cron or a systemd timer.
+
+### Command-line flags
+
+| Flag | Effect |
+| --- | --- |
+| `-c`, `--conf CONFIG` | Path to the config file (default `snapraid-runner.conf`). |
+| `--no-scrub` | Skip scrub for this run, overriding `scrub.enabled` in the config. |
+| `--ignore-deletethreshold` | Sync even if the delete threshold is exceeded. |
+
+### Config file
+
+See `snapraid-runner.conf.example` for the full, commented template. Sections:
+
+- `[snapraid]` — `executable`, `config`, `deletethreshold`, `touch`.
+- `[logging]` — `file` (leave empty to disable), `maxsize` (KiB).
+- `[notification]` — see below.
+- `[scrub]` — `enabled`, `plan`, `older-than`.
+
+## Notifications
+
+Notifications are delivered by [Apprise](https://github.com/caronc/apprise),
+which supports a large range of services (Pushbullet, Telegram, ntfy, email,
+Discord, and many more). The runner reads an Apprise **YAML config file** whose
+path is given by `notification.config`; see `apprise.yml.example` and the
+[Apprise config_yaml wiki](https://github.com/caronc/apprise/wiki/config_yaml)
+for the format.
+
+`[notification]` options:
+
+- `enabled` — set to `false` to disable notifications entirely.
+- `sendon` — comma-separated list of events to notify on; any of `success`,
+  `error`.
+- `short` — `true` (default) sends only the high-level log; set to `false` to
+  include the full program output.
+- `config` — path to the Apprise YAML file.
+
+## Development
+
+A Nix dev shell provides Python (with Apprise) and the `snapraid` binary:
+
+```sh
+nix develop
+```
+
+Or, with [direnv](https://direnv.net/), just `cd` into the repo — the committed
+`.envrc` (`use flake`) loads the same shell automatically after `direnv allow`.

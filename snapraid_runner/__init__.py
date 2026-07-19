@@ -33,11 +33,15 @@ def tee_log(infile, out_lines, log_level):
     return t
 
 
-def snapraid_command(command, args={}, *, allow_statuscodes=[]):
+def snapraid_command(command, args=None, *, allow_statuscodes=None):
     """
     Run snapraid command
     Raises subprocess.CalledProcessError if errorlevel != 0
     """
+    if args is None:
+        args = {}
+    if allow_statuscodes is None:
+        allow_statuscodes = []
     arguments = ["--conf", config["snapraid"]["config"],
                  "--quiet"]
     for (k, v) in args.items():
@@ -57,12 +61,13 @@ def snapraid_command(command, args={}, *, allow_statuscodes=[]):
     for t in threads:
         t.join()
     ret = p.wait()
-    # sleep for a while to make pervent output mixup
+    # sleep for a while to prevent output mixup
     time.sleep(0.3)
     if ret == 0 or ret in allow_statuscodes:
         return out
     else:
-        raise subprocess.CalledProcessError(ret, "snapraid " + command)
+        raise subprocess.CalledProcessError(ret, f"snapraid {command}")
+
 
 def send_notification(success):
     import apprise
@@ -80,10 +85,10 @@ def send_notification(success):
     apobj.add(apprise_config)
 
     if success:
-        message_title = "SnapRAID job completed successfully:\n\n\n"
+        message_title = "SnapRAID job completed successfully"
     else:
-        message_title = "Error during SnapRAID job:\n\n\n"
-  
+        message_title = "Error during SnapRAID job"
+
     message_body = notification_log.getvalue()
 
     # Then notify these services any time you desire. The below would
@@ -92,10 +97,12 @@ def send_notification(success):
     apobj.notify(
         body=message_body,
         title=message_title,
-    )   
+    )
+
 
 def finish(is_success):
-    if ("error", "success")[is_success] in config["notification"]["sendon"]:
+    if (config["notification"]["enabled"] and
+            ("error", "success")[is_success] in config["notification"]["sendon"]):
         try:
             send_notification(is_success)
         except Exception:
@@ -130,6 +137,17 @@ def load_config(args):
     config["scrub"]["enabled"] = (config["scrub"]["enabled"].lower() == "true")
     config["snapraid"]["touch"] = (
         config["snapraid"]["touch"].lower() == "true")
+    config["notification"]["short"] = (
+        config["notification"]["short"].lower() == "true")
+
+    if config["notification"]["enabled"] == "":
+        # Backward-compat: older configs have no `enabled` key. Treat a
+        # configured `sendon` as opting in, rather than silently disabling
+        # notifications for everyone who never set the key.
+        config["notification"]["enabled"] = bool(config["notification"]["sendon"])
+    else:
+        config["notification"]["enabled"] = (
+            config["notification"]["enabled"].lower() == "true")
 
     # Migration
     if config["scrub"]["percentage"]:
@@ -164,13 +182,13 @@ def setup_logger():
         file_logger.setFormatter(log_format)
         root_logger.addHandler(file_logger)
 
-    if config["notification"]["sendon"]:
+    if config["notification"]["enabled"] and config["notification"]["sendon"]:
         global notification_log
         notification_log = StringIO()
         notification_logger = logging.StreamHandler(notification_log)
         notification_logger.setFormatter(log_format)
         if config["notification"]["short"]:
-            # Don't send programm stdout in email
+            # Don't send program stdout in the notification
             notification_logger.setLevel(logging.INFO)
         root_logger.addHandler(notification_logger)
 
@@ -220,13 +238,13 @@ def run():
     logging.info("=" * 60)
 
     if not os.path.isfile(config["snapraid"]["executable"]):
-        logging.error("The configured snapraid executable \"{}\" does not "
-                      "exist or is not a file".format(
-                          config["snapraid"]["executable"]))
+        logging.error(
+            f'The configured snapraid executable "{config["snapraid"]["executable"]}"'
+            " does not exist or is not a file")
         finish(False)
     if not os.path.isfile(config["snapraid"]["config"]):
-        logging.error("Snapraid config does not exist at " +
-                      config["snapraid"]["config"])
+        logging.error(
+            f'Snapraid config does not exist at {config["snapraid"]["config"]}')
         finish(False)
 
     if config["snapraid"]["touch"]:
@@ -241,14 +259,15 @@ def run():
     diff_results = Counter(line.split(" ")[0] for line in diff_out)
     diff_results = dict((x, diff_results[x]) for x in
                         ["add", "remove", "move", "update"])
-    logging.info(("Diff results: {add} added,  {remove} removed,  " +
-                  "{move} moved,  {update} modified").format(**diff_results))
+    logging.info(
+        "Diff results: {add} added,  {remove} removed,  "
+        "{move} moved,  {update} modified".format(**diff_results))
 
     if (config["snapraid"]["deletethreshold"] >= 0 and
             diff_results["remove"] > config["snapraid"]["deletethreshold"]):
         logging.error(
-            "Deleted files exceed delete threshold of {}, aborting".format(
-                config["snapraid"]["deletethreshold"]))
+            "Deleted files exceed delete threshold of "
+            f'{config["snapraid"]["deletethreshold"]}, aborting')
         logging.error("Run again with --ignore-deletethreshold to sync anyways")
         finish(False)
 

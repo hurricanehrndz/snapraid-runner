@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snapraid-runner"
+version = "1.2"
+requires-python = ">=3.9"
+dependencies = ["apprise"]
+
+[project.scripts]
+snapraid-runner = "snapraid_runner:main"
+
+[tool.setuptools]
+packages = ["snapraid_runner"]

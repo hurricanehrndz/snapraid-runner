@@ -171,3 +171,9 @@ cython_debug/
 
 # nix flake results
 result
+
+# direnv
+.direnv/
+
+# scratch / release-notes staging
+.tmp/
