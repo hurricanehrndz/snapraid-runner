@@ -171,9 +171,15 @@ cython_debug/
 
 # nix flake results
 result
+result-overlay
 
 # direnv
 .direnv/
+
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
 
 # scratch / release-notes staging
 .tmp/
