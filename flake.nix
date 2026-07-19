@@ -6,24 +6,24 @@
     utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, utils }: {
+  outputs = { self, nixpkgs, utils }: let
+    mkSnapraidRunner = python3Packages:
+      with python3Packages;
+      buildPythonApplication {
+        pname = "snapraid-runner";
+        version = "1.2";
+
+        pyproject = true;
+        build-system = [ setuptools ];
+
+        propagatedBuildInputs = [ apprise ];
+
+        src = ./.;
+      };
+  in {
     packages = utils.lib.eachDefaultSystemMap ( system: rec {
       snapraid-runner =
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-        in
-        with pkgs.python3Packages;
-        buildPythonApplication {
-          pname = "snapraid-runner";
-          version = "1.2";
-
-          pyproject = true;
-          build-system = [ setuptools ];
-
-          propagatedBuildInputs = [ apprise ];
-
-          src = ./.;
-        };
+        mkSnapraidRunner nixpkgs.legacyPackages.${system}.python3Packages;
       default = snapraid-runner;
     } );
 
@@ -39,8 +39,10 @@
         };
       } );
 
+    # Build from the consumer's package set so the overlay does not drag in a
+    # second nixpkgs instantiation or a mismatched python.
     overlays.snapraid-runner = final: prev: {
-      inherit (self.packages.${final.system}) snapraid-runner;
+      snapraid-runner = mkSnapraidRunner final.python3Packages;
     };
     overlays.default = self.overlays.snapraid-runner;
 
