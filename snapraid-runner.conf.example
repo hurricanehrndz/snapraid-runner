@@ -23,9 +23,25 @@ sendon = success,error
 ; set to false to get full programm output
 short = true
 
+; set to true to skip the success notification when a run found no changes
+; (a no-op). Failures are always sent.
+quiet = false
+
 ; Python Apprise config.
 ; https://github.com/caronc/apprise/wiki/config_yaml
 config = apprise.yml
+
+[history]
+; append one JSON line per run to this file (ISO timestamp, diff counts,
+; per-phase durations, failures). Leave empty to disable. Entries older
+; than 90 days are pruned automatically.
+file =
+
+[report]
+; used by the scheduled weekly report (snapraid-runner --report weekly).
+; warn in the report when the oldest un-scrubbed block is older than this many
+; days. Set to 0 to disable the warning. Default: 30
+scrub-age-warning = 30
 
 [scrub]
 ; set to true to run scrub after sync

@@ -10,6 +10,52 @@ with lib; let
     if cfg.logging.file == null
     then overrideExisting cfg.logging {file = "";}
     else cfg.logging;
+
+  # Shared hardening for both the runner and the weekly-report units. ExecStart
+  # differs, so it is merged in per-service.
+  sharedServiceConfig = {
+    Type = "oneshot";
+    Nice = 19;
+    IOSchedulingPriority = 7;
+    CPUSchedulingPolicy = "batch";
+
+    LockPersonality = true;
+    MemoryDenyWriteExecute = true;
+    NoNewPrivileges = true;
+    PrivateTmp = true;
+    ProtectClock = true;
+    ProtectControlGroups = true;
+    ProtectHostname = true;
+    ProtectKernelLogs = true;
+    ProtectKernelModules = true;
+    ProtectKernelTunables = true;
+    RestrictNamespaces = true;
+    RestrictRealtime = true;
+    RestrictSUIDSGID = true;
+    SystemCallArchitectures = "native";
+    SystemCallFilter = "@system-service";
+    SystemCallErrorNumber = "EPERM";
+    CapabilityBoundingSet = "CAP_DAC_OVERRIDE CAP_FOWNER";
+
+    ProtectSystem = "strict";
+    ProtectHome = "read-only";
+    # Creates and keeps /var/lib/snapraid-runner writable (default history dir)
+    # despite ProtectSystem=strict.
+    StateDirectory = "snapraid-runner";
+    ReadWritePaths =
+      # sync, diff, scrub requires access to directories containing content files
+      # to remove them if they are stale
+      let
+        contentDirs = map dirOf config.services.snapraid.contentFiles;
+      in
+        unique (
+          attrValues config.services.snapraid.dataDisks
+          ++ contentDirs
+          ++ config.services.snapraid.parityFiles
+          ++ optional (cfg.logging.file != null) (dirOf cfg.logging.file)
+          ++ optional (cfg.history.file != null) (dirOf cfg.history.file)
+        );
+  };
 in {
   options.services.snapraid-runner = with types; {
     enable = mkEnableOption "snapraid-runner service";
@@ -78,6 +124,12 @@ in {
         description = "set to false to get full program output";
         type = bool;
       };
+      quiet = mkOption {
+        default = false;
+        example = true;
+        description = "suppress the success notification when a run made no changes (a no-op); failures are always sent";
+        type = bool;
+      };
       config = mkOption {
         default = "/etc/snapraid-runner.apprise.yaml";
         example = "/run/agenix/snapraid-runner.apprise.yaml";
@@ -106,6 +158,33 @@ in {
         default = 10;
         example = 10;
         description = "minimum block age (in days) for scrubbing. Only used with percentage plans";
+        type = int;
+      };
+    };
+
+    # run history (JSONL, one record per run; consumed by the weekly report)
+    history = {
+      file = mkOption {
+        default = "/var/lib/snapraid-runner/history.jsonl";
+        example = "/var/lib/snapraid-runner/history.jsonl";
+        description = "append one JSON line per run to this file, leave null to disable. Entries older than 90 days are pruned automatically.";
+        type = nullOr path;
+      };
+    };
+
+    # scheduled weekly report (snapraid-runner --report weekly)
+    report = {
+      enable = mkEnableOption "weekly report";
+      interval = mkOption {
+        default = "Sun 09:00";
+        example = "Sun 09:00";
+        description = "how often to send the weekly report (systemd OnCalendar)";
+        type = str;
+      };
+      scrub-age-warning = mkOption {
+        default = 30;
+        example = 30;
+        description = "warn in the report when the oldest un-scrubbed block is older than this many days. Set to 0 to disable the warning.";
         type = int;
       };
     };
@@ -145,6 +224,14 @@ in {
               removeAttrs cfg.notification ["enable"]
               // {enabled = cfg.notification.enable;};
             scrub = cfg.scrub;
+            # Empty string disables history, matching logging.file null-handling.
+            history.file =
+              if cfg.history.file == null
+              then ""
+              else cfg.history.file;
+            # Only scrub-age-warning is read from [report]; interval/enable
+            # drive the systemd timer, not the Python.
+            report."scrub-age-warning" = cfg.report.scrub-age-warning;
           };
         }
         // optionalAttrs (cfg.apprise-conf != null) {
@@ -152,54 +239,31 @@ in {
         };
     };
 
-    systemd.services = {
-      # disable snapraid services
-      snapraid-scrub.enable = mkForce false;
-      snapraid-sync.enable = mkForce false;
-      snapraid-runner = {
-        description = "Diff, Sync and Scrub the SnapRAID array via snapraid-runner";
-        startAt = cfg.interval;
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = "${pkgs.snapraid-runner}/bin/snapraid-runner -c /etc/snapraid-runner.conf";
-          Nice = 19;
-          IOSchedulingPriority = 7;
-          CPUSchedulingPolicy = "batch";
-
-          LockPersonality = true;
-          MemoryDenyWriteExecute = true;
-          NoNewPrivileges = true;
-          PrivateTmp = true;
-          ProtectClock = true;
-          ProtectControlGroups = true;
-          ProtectHostname = true;
-          ProtectKernelLogs = true;
-          ProtectKernelModules = true;
-          ProtectKernelTunables = true;
-          RestrictNamespaces = true;
-          RestrictRealtime = true;
-          RestrictSUIDSGID = true;
-          SystemCallArchitectures = "native";
-          SystemCallFilter = "@system-service";
-          SystemCallErrorNumber = "EPERM";
-          CapabilityBoundingSet = "CAP_DAC_OVERRIDE CAP_FOWNER";
-
-          ProtectSystem = "strict";
-          ProtectHome = "read-only";
-          ReadWritePaths =
-            # sync, diff, scrub requires access to directories containing content files
-            # to remove them if they are stale
-            let
-              contentDirs = map dirOf config.services.snapraid.contentFiles;
-            in
-              unique (
-                attrValues config.services.snapraid.dataDisks
-                ++ contentDirs
-                ++ config.services.snapraid.parityFiles
-                ++ optional (cfg.logging.file != null) (dirOf cfg.logging.file)
-              );
+    systemd.services =
+      {
+        # disable snapraid services
+        snapraid-scrub.enable = mkForce false;
+        snapraid-sync.enable = mkForce false;
+        snapraid-runner = {
+          description = "Diff, Sync and Scrub the SnapRAID array via snapraid-runner";
+          startAt = cfg.interval;
+          serviceConfig =
+            sharedServiceConfig
+            // {
+              ExecStart = "${pkgs.snapraid-runner}/bin/snapraid-runner -c /etc/snapraid-runner.conf";
+            };
+        };
+      }
+      // optionalAttrs cfg.report.enable {
+        snapraid-runner-report = {
+          description = "Send the SnapRAID weekly report via snapraid-runner";
+          startAt = cfg.report.interval;
+          serviceConfig =
+            sharedServiceConfig
+            // {
+              ExecStart = "${pkgs.snapraid-runner}/bin/snapraid-runner -c /etc/snapraid-runner.conf --report weekly";
+            };
         };
       };
-    };
   };
 }
