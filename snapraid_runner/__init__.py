@@ -37,7 +37,7 @@ def init_report():
         "scrub_plan": "",
         "success": None,
         "failed_phase": None,
-        "error": "",        # multi-line excerpt for the notification body
+        "error": "",  # multi-line excerpt for the notification body
         "error_short": "",  # one-line summary for the history record
     }
 
@@ -47,11 +47,13 @@ def tee_log(infile, out_lines, log_level):
     Create a thread that saves all the output on infile to out_lines and
     logs every line with log_level
     """
+
     def tee_thread():
         for line in iter(infile.readline, ""):
             logging.log(log_level, line.rstrip())
             out_lines.append(line)
         infile.close()
+
     t = threading.Thread(target=tee_thread)
     t.daemon = True
     t.start()
@@ -67,9 +69,8 @@ def snapraid_command(command, args=None, *, allow_statuscodes=None):
         args = {}
     if allow_statuscodes is None:
         allow_statuscodes = []
-    arguments = ["--conf", config["snapraid"]["config"],
-                 "--quiet"]
-    for (k, v) in args.items():
+    arguments = ["--conf", config["snapraid"]["config"], "--quiet"]
+    for k, v in args.items():
         arguments.extend(["--" + k, str(v)])
     p = subprocess.Popen(
         [config["snapraid"]["executable"], command] + arguments,
@@ -78,12 +79,14 @@ def snapraid_command(command, args=None, *, allow_statuscodes=None):
         # Snapraid always outputs utf-8 on windows. On linux, utf-8
         # also seems a sensible assumption.
         encoding="utf-8",
-        errors="replace")
+        errors="replace",
+    )
     out = []
     err = []
     threads = [
         tee_log(p.stdout, out, logging.OUTPUT),
-        tee_log(p.stderr, err, logging.OUTERR)]
+        tee_log(p.stderr, err, logging.OUTERR),
+    ]
     for t in threads:
         t.join()
     ret = p.wait()
@@ -103,8 +106,7 @@ def snapraid_command(command, args=None, *, allow_statuscodes=None):
 
 def notifications_configured():
     """True when apprise notifications are enabled and have a config file."""
-    return bool(config["notification"]["enabled"]
-                and config["notification"]["config"])
+    return bool(config["notification"]["enabled"] and config["notification"]["config"])
 
 
 def apprise_send(title, body, attach=None):
@@ -114,6 +116,7 @@ def apprise_send(title, body, attach=None):
     that don't support attachments simply ignore it.
     """
     import apprise
+
     logging.info("sending msg")
     # Create an Apprise instance
     apobj = apprise.Apprise()
@@ -141,7 +144,8 @@ def send_notification(success):
     short = config["notification"]["short"]
     full_log = notification_log.getvalue() if notification_log else None
     message_title, message_body = report_mod.render(
-        run_report, short=short, full_log=full_log)
+        run_report, short=short, full_log=full_log
+    )
 
     if success:
         apprise_send(message_title, message_body)
@@ -162,8 +166,8 @@ def send_notification(success):
                 f.write(full_capture.getvalue() if full_capture else "")
         except Exception:
             logging.warning(
-                "Failed to write run log attachment; sending without it",
-                exc_info=True)
+                "Failed to write run log attachment; sending without it", exc_info=True
+            )
             attach = None
         apprise_send(message_title, message_body, attach=attach)
     finally:
@@ -217,8 +221,10 @@ def fail(phase, message, tail=None):
         lines.append(message)
     run_report["error"] = "\n".join(line for line in lines if line.strip())
     run_report["error_short"] = (
-        message.strip().splitlines()[0] if message and message.strip()
-        else f"{phase} failed")
+        message.strip().splitlines()[0]
+        if message and message.strip()
+        else f"{phase} failed"
+    )
     finish(False)
 
 
@@ -226,15 +232,15 @@ def load_config(args):
     global config
     parser = configparser.RawConfigParser()
     parser.read(args.conf)
-    sections = ["snapraid", "logging", "scrub", "notification", "history",
-                "report"]
+    sections = ["snapraid", "logging", "scrub", "notification", "history", "report"]
     config = dict((x, defaultdict(lambda: "")) for x in sections)
     for section in parser.sections():
-        for (k, v) in parser.items(section):
+        for k, v in parser.items(section):
             config[section][k] = v.strip()
 
     int_options = [
-        ("snapraid", "deletethreshold"), ("logging", "maxsize"),
+        ("snapraid", "deletethreshold"),
+        ("logging", "maxsize"),
         ("scrub", "older-than"),
     ]
     for section, option in int_options:
@@ -254,13 +260,10 @@ def load_config(args):
         except ValueError:
             config["report"]["scrub-age-warning"] = 30
 
-    config["scrub"]["enabled"] = (config["scrub"]["enabled"].lower() == "true")
-    config["snapraid"]["touch"] = (
-        config["snapraid"]["touch"].lower() == "true")
-    config["notification"]["short"] = (
-        config["notification"]["short"].lower() == "true")
-    config["notification"]["quiet"] = (
-        config["notification"]["quiet"].lower() == "true")
+    config["scrub"]["enabled"] = config["scrub"]["enabled"].lower() == "true"
+    config["snapraid"]["touch"] = config["snapraid"]["touch"].lower() == "true"
+    config["notification"]["short"] = config["notification"]["short"].lower() == "true"
+    config["notification"]["quiet"] = config["notification"]["quiet"].lower() == "true"
 
     if config["notification"]["enabled"] == "":
         # Backward-compat: older configs have no `enabled` key. Treat a
@@ -269,7 +272,8 @@ def load_config(args):
         config["notification"]["enabled"] = bool(config["notification"]["sendon"])
     else:
         config["notification"]["enabled"] = (
-            config["notification"]["enabled"].lower() == "true")
+            config["notification"]["enabled"].lower() == "true"
+        )
 
     # Migration
     if config["scrub"]["percentage"]:
@@ -283,8 +287,7 @@ def load_config(args):
 
 
 def setup_logger():
-    log_format = logging.Formatter(
-        "%(asctime)s [%(levelname)-6.6s] %(message)s")
+    log_format = logging.Formatter("%(asctime)s [%(levelname)-6.6s] %(message)s")
     root_logger = logging.getLogger()
     logging.OUTPUT = 15
     logging.addLevelName(logging.OUTPUT, "OUTPUT")
@@ -298,9 +301,8 @@ def setup_logger():
     if config["logging"]["file"]:
         max_log_size = max(config["logging"]["maxsize"], 0) * 1024
         file_logger = logging.handlers.RotatingFileHandler(
-            config["logging"]["file"],
-            maxBytes=max_log_size,
-            backupCount=9)
+            config["logging"]["file"], maxBytes=max_log_size, backupCount=9
+        )
         file_logger.setFormatter(log_format)
         root_logger.addHandler(file_logger)
 
@@ -326,18 +328,31 @@ def setup_logger():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--conf",
-                        default="snapraid-runner.conf",
-                        metavar="CONFIG",
-                        help="Configuration file (default: %(default)s)")
-    parser.add_argument("--no-scrub", action='store_false',
-                        dest='scrub', default=None,
-                        help="Do not scrub (overrides config)")
-    parser.add_argument("--ignore-deletethreshold", action='store_true',
-                        help="Sync even if configured delete threshold is exceeded")
-    parser.add_argument("--report", choices=["weekly"], default=None,
-                        help="Build and send a scheduled report instead of "
-                             "running the sync cycle")
+    parser.add_argument(
+        "-c",
+        "--conf",
+        default="snapraid-runner.conf",
+        metavar="CONFIG",
+        help="Configuration file (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--no-scrub",
+        action="store_false",
+        dest="scrub",
+        default=None,
+        help="Do not scrub (overrides config)",
+    )
+    parser.add_argument(
+        "--ignore-deletethreshold",
+        action="store_true",
+        help="Sync even if configured delete threshold is exceeded",
+    )
+    parser.add_argument(
+        "--report",
+        choices=["weekly"],
+        default=None,
+        help="Build and send a scheduled report instead of running the sync cycle",
+    )
     args = parser.parse_args()
 
     if not os.path.exists(args.conf):
@@ -397,9 +412,11 @@ def run_weekly():
         status = report_mod.parse_status(raw_status)
 
         title, body = report_mod.render_weekly(
-            records, status,
+            records,
+            status,
             scrub_age_warning=config["report"]["scrub-age-warning"],
-            raw_status=raw_status)
+            raw_status=raw_status,
+        )
     except Exception:
         logging.exception("Failed to build weekly report")
         return 1
@@ -430,11 +447,12 @@ def run_phase(name, command, args=None, *, allow_statuscodes=None):
         out = snapraid_command(command, args, allow_statuscodes=allow_statuscodes)
     except subprocess.CalledProcessError as e:
         run_report["phases"][name] = {
-            "duration": time.monotonic() - start, "success": False}
+            "duration": time.monotonic() - start,
+            "success": False,
+        }
         logging.error(e)
         fail(name, str(e), getattr(e, "output_tail", None))
-    run_report["phases"][name] = {
-        "duration": time.monotonic() - start, "success": True}
+    run_report["phases"][name] = {"duration": time.monotonic() - start, "success": True}
     return out
 
 
@@ -446,12 +464,12 @@ def run():
     if not os.path.isfile(config["snapraid"]["executable"]):
         message = (
             f'The configured snapraid executable "{config["snapraid"]["executable"]}"'
-            " does not exist or is not a file")
+            " does not exist or is not a file"
+        )
         logging.error(message)
         fail("run", message)
     if not os.path.isfile(config["snapraid"]["config"]):
-        message = (
-            f'Snapraid config does not exist at {config["snapraid"]["config"]}')
+        message = f"Snapraid config does not exist at {config['snapraid']['config']}"
         logging.error(message)
         fail("run", message)
 
@@ -465,24 +483,34 @@ def run():
     logging.info("*" * 60)
 
     diff_results = Counter(line.split(" ")[0] for line in diff_out)
-    diff_results = dict((x, diff_results[x]) for x in
-                        ["add", "remove", "move", "update"])
+    diff_results = dict(
+        (x, diff_results[x]) for x in ["add", "remove", "move", "update"]
+    )
     run_report["diff"] = diff_results
     logging.info(
         "Diff results: {add} added,  {remove} removed,  "
-        "{move} moved,  {update} modified".format(**diff_results))
+        "{move} moved,  {update} modified".format(**diff_results)
+    )
 
-    if (config["snapraid"]["deletethreshold"] >= 0 and
-            diff_results["remove"] > config["snapraid"]["deletethreshold"]):
+    if (
+        config["snapraid"]["deletethreshold"] >= 0
+        and diff_results["remove"] > config["snapraid"]["deletethreshold"]
+    ):
         message = (
             "Deleted files exceed delete threshold of "
-            f'{config["snapraid"]["deletethreshold"]}, aborting. '
-            "Run again with --ignore-deletethreshold to sync anyways")
+            f"{config['snapraid']['deletethreshold']}, aborting. "
+            "Run again with --ignore-deletethreshold to sync anyways"
+        )
         logging.error(message)
         fail("sync", message)
 
-    if (diff_results["remove"] + diff_results["add"] + diff_results["move"] +
-            diff_results["update"] == 0):
+    if (
+        diff_results["remove"]
+        + diff_results["add"]
+        + diff_results["move"]
+        + diff_results["update"]
+        == 0
+    ):
         logging.info("No changes detected, no sync required")
     else:
         logging.info("Running sync...")
@@ -502,7 +530,7 @@ def run():
                 "plan": config["scrub"]["plan"],
                 "older-than": config["scrub"]["older-than"],
             }
-            run_report["scrub_plan"] = f'{config["scrub"]["plan"]}%'
+            run_report["scrub_plan"] = f"{config['scrub']['plan']}%"
         run_phase("scrub", "scrub", scrub_args)
         logging.info("*" * 60)
 

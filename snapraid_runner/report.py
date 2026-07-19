@@ -4,6 +4,7 @@ Everything here is a pure function over a plain report dict (see
 ``snapraid_runner.init_report`` for its shape) so it can be tested without
 ever invoking snapraid.
 """
+
 import json
 import os
 import re
@@ -65,8 +66,10 @@ def build_title(report):
         return "✅ SnapRAID: no changes"
 
     words = [
-        ("add", "added"), ("remove", "removed"),
-        ("update", "updated"), ("move", "moved"),
+        ("add", "added"),
+        ("remove", "removed"),
+        ("update", "updated"),
+        ("move", "moved"),
     ]
     parts = [f"{diff[k]} {label}" for k, label in words if diff.get(k)]
     title = "✅ SnapRAID: " + " · ".join(parts)
@@ -113,10 +116,7 @@ def render(report, short=True, full_log=None):
 
 def should_suppress(report, quiet):
     """True when a quiet no-op success should not be notified."""
-    return bool(
-        quiet
-        and report.get("success")
-        and diff_total(report["diff"]) == 0)
+    return bool(quiet and report.get("success") and diff_total(report["diff"]) == 0)
 
 
 def to_history_record(report, now=None):
@@ -154,9 +154,9 @@ def append_history(path, record, now=None):
                     continue
                 try:
                     entry = json.loads(line)
-                    ts = datetime.strptime(
-                        entry["timestamp"], _TS_FORMAT
-                    ).replace(tzinfo=timezone.utc)
+                    ts = datetime.strptime(entry["timestamp"], _TS_FORMAT).replace(
+                        tzinfo=timezone.utc
+                    )
                 except (ValueError, KeyError, TypeError):
                     continue  # skip malformed, don't crash the run
                 if ts >= cutoff:
@@ -186,7 +186,7 @@ def append_history(path, record, now=None):
 # --------------------------------------------------------------------------
 
 BAR_WIDTH = 10
-_BAR_FULL = "▇"   # ▇
+_BAR_FULL = "▇"  # ▇
 _BAR_EMPTY = "▁"  # ▁
 
 # Only mention fragmentation when it's actually worth a look. Excess fragments
@@ -212,9 +212,9 @@ def read_history(path, now=None, days=7):
                 continue
             try:
                 entry = json.loads(line)
-                ts = datetime.strptime(
-                    entry["timestamp"], _TS_FORMAT
-                ).replace(tzinfo=timezone.utc)
+                ts = datetime.strptime(entry["timestamp"], _TS_FORMAT).replace(
+                    tzinfo=timezone.utc
+                )
             except (ValueError, KeyError, TypeError):
                 continue
             if ts >= cutoff:
@@ -237,10 +237,12 @@ def summarize_history(records):
             summary["succeeded"] += 1
         else:
             summary["failed"] += 1
-            summary["failures"].append({
-                "phase": rec.get("failed_phase") or "run",
-                "error": (rec.get("error") or "").strip(),
-            })
+            summary["failures"].append(
+                {
+                    "phase": rec.get("failed_phase") or "run",
+                    "error": (rec.get("error") or "").strip(),
+                }
+            )
         for k in _DIFF_KEYS:
             summary["diff"][k] += (rec.get("diff") or {}).get(k, 0)
         summary["sync_seconds"] += (rec.get("durations") or {}).get("sync", 0)
@@ -338,7 +340,7 @@ def parse_status(text):
     result = {
         "disks": [],
         "total": None,
-        "scrub": None,   # {"oldest": int, "median": int, "newest": int}
+        "scrub": None,  # {"oldest": int, "median": int, "newest": int}
         "health": None,  # {"ok": bool, "text": str}
     }
 
@@ -355,7 +357,7 @@ def parse_status(text):
             row = _parse_disk_row(line)
             if row:
                 result["disks"].append(row)
-        for line in lines[dash_idx + 1:]:
+        for line in lines[dash_idx + 1 :]:
             if line.strip():
                 result["total"] = _parse_total_row(line)
                 break
@@ -363,7 +365,9 @@ def parse_status(text):
     for line in lines:
         m = re.search(
             r"oldest block was scrubbed (\d+) days? ago,"
-            r" the median (\d+), the newest (\d+)", line)
+            r" the median (\d+), the newest (\d+)",
+            line,
+        )
         if m:
             result["scrub"] = {
                 "oldest": int(m.group(1)),
@@ -387,8 +391,11 @@ def parse_status(text):
 def status_has_content(status):
     """True if parse_status extracted anything usable."""
     return bool(
-        status.get("disks") or status.get("total")
-        or status.get("scrub") or status.get("health"))
+        status.get("disks")
+        or status.get("total")
+        or status.get("scrub")
+        or status.get("health")
+    )
 
 
 def format_free(gb):
@@ -436,9 +443,11 @@ def render_usage_graph(status):
 
 def _scrub_age_line(scrub, warn_days):
     """'Scrub age: oldest 45d · median 8d · newest 0d', ⚠️ if too old."""
-    line = (f"Scrub age: oldest {scrub['oldest']}d"
-            f" · median {scrub['median']}d"
-            f" · newest {scrub['newest']}d")
+    line = (
+        f"Scrub age: oldest {scrub['oldest']}d"
+        f" · median {scrub['median']}d"
+        f" · newest {scrub['newest']}d"
+    )
     if warn_days and scrub["oldest"] > warn_days:
         line = "⚠️ " + line
     return line
@@ -479,9 +488,7 @@ def build_weekly_body(summary, status, scrub_age_warning=30, raw_status=None):
         week.append(" · ".join(parts))
         week.append("Files churned: " + _diff_summary(summary["diff"]))
         if summary["sync_seconds"]:
-            week.append(
-                "Total sync time: "
-                + format_duration(summary["sync_seconds"]))
+            week.append("Total sync time: " + format_duration(summary["sync_seconds"]))
     sections.append("\n".join(week))
 
     # 2. Failures
@@ -490,8 +497,8 @@ def build_weekly_body(summary, status, scrub_age_warning=30, raw_status=None):
         for f in summary["failures"]:
             err = f["error"]
             fail_lines.append(
-                f"• {f['phase']}: {err}" if err
-                else f"• {f['phase']} failed")
+                f"• {f['phase']}: {err}" if err else f"• {f['phase']} failed"
+            )
         sections.append("\n".join(fail_lines))
 
     # 3. Disk usage graph
@@ -507,7 +514,8 @@ def build_weekly_body(summary, status, scrub_age_warning=30, raw_status=None):
     if total and (total.get("excess") or 0) >= FRAGMENT_WARN:
         tail.append(
             f"Fragmentation: {total['excess']} excess fragments"
-            f" across {total['frag_files']} files")
+            f" across {total['frag_files']} files"
+        )
     if tail:
         sections.append("\n".join(tail))
 

@@ -1,4 +1,5 @@
 """Unit tests for snapraid_runner.report (stdlib unittest, no pytest)."""
+
 import json
 import os
 import sys
@@ -53,18 +54,19 @@ class TitleTest(unittest.TestCase):
         self.assertEqual(
             title,
             "✅ SnapRAID: 12 added · 3 removed · 5 updated · 2 moved "
-            "· synced in 4m 12s")
+            "· synced in 4m 12s",
+        )
 
     def test_success_with_changes_partial(self):
         r = make_report(diff={"add": 12, "remove": 3, "move": 0, "update": 0})
         title = report.build_title(r)
-        self.assertEqual(
-            title, "✅ SnapRAID: 12 added · 3 removed · synced in 4m 12s")
+        self.assertEqual(title, "✅ SnapRAID: 12 added · 3 removed · synced in 4m 12s")
 
     def test_no_changes(self):
         r = make_report(
             diff={"add": 0, "remove": 0, "move": 0, "update": 0},
-            phases={"diff": {"duration": 8.0, "success": True}})
+            phases={"diff": {"duration": 8.0, "success": True}},
+        )
         self.assertEqual(report.build_title(r), "✅ SnapRAID: no changes")
 
     def test_failure_names_phase(self):
@@ -82,7 +84,8 @@ class BodyTest(unittest.TestCase):
         self.assertEqual(
             body,
             "Diff   +12 added · −3 removed · ~5 updated · →2 moved   (8s)\n"
-            "Sync   ✅ completed   (4m 12s)")
+            "Sync   ✅ completed   (4m 12s)",
+        )
 
     def test_body_scrub_plan(self):
         r = make_report(
@@ -91,24 +94,28 @@ class BodyTest(unittest.TestCase):
                 "diff": {"duration": 8.0, "success": True},
                 "sync": {"duration": 252.0, "success": True},
                 "scrub": {"duration": 483.0, "success": True},
-            })
+            },
+        )
         body = report.build_body(r)
         self.assertIn("Scrub  ✅ plan 12%   (8m 3s)", body)
 
     def test_body_no_changes(self):
         r = make_report(
             diff={"add": 0, "remove": 0, "move": 0, "update": 0},
-            phases={"diff": {"duration": 8.0, "success": True}})
+            phases={"diff": {"duration": 8.0, "success": True}},
+        )
         self.assertEqual(report.build_body(r), "Diff   no changes   (8s)")
 
     def test_failure_leads_with_excerpt(self):
         r = make_report(
-            success=False, failed_phase="sync",
+            success=False,
+            failed_phase="sync",
             error="snapraid: fatal disk error\nCommand returned status 1",
             phases={
                 "diff": {"duration": 8.0, "success": True},
                 "sync": {"duration": 3.0, "success": False},
-            })
+            },
+        )
         body = report.build_body(r)
         # Error excerpt must lead the body, before the phase summary.
         self.assertTrue(body.startswith("snapraid: fatal disk error"))
@@ -116,36 +123,32 @@ class BodyTest(unittest.TestCase):
         self.assertLess(body.index("fatal disk error"), body.index("Sync"))
 
     def test_short_false_appends_full_log(self):
-        body = report.build_body(
-            make_report(), short=False, full_log="line1\nline2\n")
+        body = report.build_body(make_report(), short=False, full_log="line1\nline2\n")
         self.assertIn("Sync   ✅ completed", body)
         self.assertIn("----", body)
         self.assertTrue(body.rstrip().endswith("line2"))
 
     def test_short_true_omits_full_log(self):
-        body = report.build_body(
-            make_report(), short=True, full_log="secret log")
+        body = report.build_body(make_report(), short=True, full_log="secret log")
         self.assertNotIn("secret log", body)
 
 
 class SuppressTest(unittest.TestCase):
     def test_suppress_quiet_noop_success(self):
-        r = make_report(
-            diff={"add": 0, "remove": 0, "move": 0, "update": 0})
+        r = make_report(diff={"add": 0, "remove": 0, "move": 0, "update": 0})
         self.assertTrue(report.should_suppress(r, quiet=True))
 
     def test_no_suppress_when_changes(self):
         self.assertFalse(report.should_suppress(make_report(), quiet=True))
 
     def test_no_suppress_when_not_quiet(self):
-        r = make_report(
-            diff={"add": 0, "remove": 0, "move": 0, "update": 0})
+        r = make_report(diff={"add": 0, "remove": 0, "move": 0, "update": 0})
         self.assertFalse(report.should_suppress(r, quiet=False))
 
     def test_never_suppress_failures(self):
         r = make_report(
-            success=False,
-            diff={"add": 0, "remove": 0, "move": 0, "update": 0})
+            success=False, diff={"add": 0, "remove": 0, "move": 0, "update": 0}
+        )
         self.assertFalse(report.should_suppress(r, quiet=True))
 
 
@@ -158,8 +161,7 @@ class HistoryTest(unittest.TestCase):
         self.assertEqual(rec["schema"], 1)
         self.assertEqual(rec["timestamp"], "2026-07-19T12:00:00Z")
         self.assertTrue(rec["success"])
-        self.assertEqual(rec["diff"], {"add": 12, "remove": 3,
-                                       "move": 2, "update": 5})
+        self.assertEqual(rec["diff"], {"add": 12, "remove": 3, "move": 2, "update": 5})
         self.assertTrue(rec["sync_ran"])
         self.assertTrue(rec["scrub_ran"])
         self.assertEqual(rec["durations"]["sync"], 252.0)
@@ -167,9 +169,11 @@ class HistoryTest(unittest.TestCase):
 
     def test_failure_record(self):
         r = make_report(
-            success=False, failed_phase="sync",
+            success=False,
+            failed_phase="sync",
             error_short="disk error",
-            phases={"diff": {"duration": 8.0, "success": True}})
+            phases={"diff": {"duration": 8.0, "success": True}},
+        )
         rec = report.to_history_record(r)
         self.assertFalse(rec["success"])
         self.assertEqual(rec["failed_phase"], "sync")
@@ -180,10 +184,8 @@ class HistoryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "history.jsonl")
             ts = self._now().strftime(report._TS_FORMAT)
-            report.append_history(path, {"timestamp": ts, "n": 1},
-                                  now=self._now())
-            report.append_history(path, {"timestamp": ts, "n": 2},
-                                  now=self._now())
+            report.append_history(path, {"timestamp": ts, "n": 1}, now=self._now())
+            report.append_history(path, {"timestamp": ts, "n": 2}, now=self._now())
             with open(path) as f:
                 lines = [json.loads(x) for x in f if x.strip()]
             self.assertEqual([e["n"] for e in lines], [1, 2])
@@ -198,8 +200,10 @@ class HistoryTest(unittest.TestCase):
                 f.write(json.dumps({"timestamp": old, "n": "old"}) + "\n")
                 f.write(json.dumps({"timestamp": recent, "n": "recent"}) + "\n")
             report.append_history(
-                path, {"timestamp": now.strftime(report._TS_FORMAT), "n": "new"},
-                now=now)
+                path,
+                {"timestamp": now.strftime(report._TS_FORMAT), "n": "new"},
+                now=now,
+            )
             with open(path) as f:
                 kept = [json.loads(x)["n"] for x in f if x.strip()]
             self.assertEqual(kept, ["recent", "new"])
@@ -209,14 +213,17 @@ class HistoryTest(unittest.TestCase):
             path = os.path.join(d, "history.jsonl")
             now = datetime(2026, 7, 19, tzinfo=timezone.utc)
             good = json.dumps(
-                {"timestamp": now.strftime(report._TS_FORMAT), "n": "good"})
+                {"timestamp": now.strftime(report._TS_FORMAT), "n": "good"}
+            )
             with open(path, "w") as f:
                 f.write("not json at all\n")
                 f.write(json.dumps({"no": "timestamp"}) + "\n")
                 f.write(good + "\n")
             report.append_history(
-                path, {"timestamp": now.strftime(report._TS_FORMAT), "n": "new"},
-                now=now)
+                path,
+                {"timestamp": now.strftime(report._TS_FORMAT), "n": "new"},
+                now=now,
+            )
             with open(path) as f:
                 kept = [json.loads(x)["n"] for x in f if x.strip()]
             self.assertEqual(kept, ["good", "new"])
@@ -293,15 +300,14 @@ class ParseStatusTest(unittest.TestCase):
 
     def test_health_danger(self):
         danger = STATUS_FIXTURE.replace(
-            "No error detected.",
-            "DANGER! In the array there are 3 errors!")
+            "No error detected.", "DANGER! In the array there are 3 errors!"
+        )
         s = report.parse_status(danger)
         self.assertFalse(s["health"]["ok"])
         self.assertIn("DANGER", s["health"]["text"])
 
     def test_has_content(self):
-        self.assertTrue(report.status_has_content(
-            report.parse_status(STATUS_FIXTURE)))
+        self.assertTrue(report.status_has_content(report.parse_status(STATUS_FIXTURE)))
 
     def test_empty_fails_soft(self):
         s = report.parse_status("")
@@ -325,11 +331,11 @@ class BarTest(unittest.TestCase):
     def test_widths_and_rounding(self):
         self.assertEqual(report._bar(0), "▁" * 10)
         self.assertEqual(report._bar(100), "▇" * 10)
-        self.assertEqual(report._bar(68), "▇" * 7 + "▁" * 3)   # 6.8 -> 7
-        self.assertEqual(report._bar(42), "▇" * 4 + "▁" * 6)   # 4.2 -> 4
-        self.assertEqual(report._bar(55), "▇" * 6 + "▁" * 4)   # 5.5 -> 6 (half-up)
-        self.assertEqual(report._bar(4), "▁" * 10)             # 0.4 -> 0
-        self.assertEqual(report._bar(5), "▇" * 1 + "▁" * 9)    # 0.5 -> 1
+        self.assertEqual(report._bar(68), "▇" * 7 + "▁" * 3)  # 6.8 -> 7
+        self.assertEqual(report._bar(42), "▇" * 4 + "▁" * 6)  # 4.2 -> 4
+        self.assertEqual(report._bar(55), "▇" * 6 + "▁" * 4)  # 5.5 -> 6 (half-up)
+        self.assertEqual(report._bar(4), "▁" * 10)  # 0.4 -> 0
+        self.assertEqual(report._bar(5), "▇" * 1 + "▁" * 9)  # 0.5 -> 1
 
     def test_clamps_out_of_range(self):
         self.assertEqual(report._bar(None), "▁" * 10)
@@ -348,21 +354,27 @@ class BarTest(unittest.TestCase):
         self.assertEqual(lines[0], "Disk usage")
         # Names padded to len("total") == 5; free space shown for disks.
         self.assertEqual(
-            lines[1], "d1    " + "▇" * 7 + "▁" * 3 + "  68%  (3.2 TB free)")
+            lines[1], "d1    " + "▇" * 7 + "▁" * 3 + "  68%  (3.2 TB free)"
+        )
         self.assertTrue(lines[-1].startswith("total "))
         self.assertIn("55%", lines[-1])
         self.assertNotIn("free", lines[-1])  # totals row has no free column
 
 
-def _hist(now, days_ago, success=True, diff=None, sync=None,
-          failed_phase=None, error=""):
+def _hist(
+    now, days_ago, success=True, diff=None, sync=None, failed_phase=None, error=""
+):
     ts = (now - timedelta(days=days_ago)).strftime(report._TS_FORMAT)
     rec = {
-        "schema": 1, "timestamp": ts, "success": success,
+        "schema": 1,
+        "timestamp": ts,
+        "success": success,
         "diff": diff or {"add": 0, "remove": 0, "move": 0, "update": 0},
-        "sync_ran": sync is not None, "scrub_ran": False,
+        "sync_ran": sync is not None,
+        "scrub_ran": False,
         "durations": {"sync": sync} if sync is not None else {},
-        "failed_phase": failed_phase, "error": error,
+        "failed_phase": failed_phase,
+        "error": error,
     }
     return rec
 
@@ -373,22 +385,27 @@ class WeekAggregationTest(unittest.TestCase):
 
     def test_aggregates_counts_and_diff(self):
         recs = [
-            _hist(self.now, 1, diff={"add": 5, "remove": 1,
-                                     "move": 0, "update": 2}, sync=100),
-            _hist(self.now, 2, diff={"add": 3, "remove": 0,
-                                     "move": 1, "update": 0}, sync=50),
-            _hist(self.now, 3, success=False,
-                  failed_phase="sync", error="disk error"),
+            _hist(
+                self.now,
+                1,
+                diff={"add": 5, "remove": 1, "move": 0, "update": 2},
+                sync=100,
+            ),
+            _hist(
+                self.now,
+                2,
+                diff={"add": 3, "remove": 0, "move": 1, "update": 0},
+                sync=50,
+            ),
+            _hist(self.now, 3, success=False, failed_phase="sync", error="disk error"),
         ]
         s = report.summarize_history(recs)
         self.assertEqual(s["runs"], 3)
         self.assertEqual(s["succeeded"], 2)
         self.assertEqual(s["failed"], 1)
-        self.assertEqual(s["diff"], {"add": 8, "remove": 1,
-                                     "move": 1, "update": 2})
+        self.assertEqual(s["diff"], {"add": 8, "remove": 1, "move": 1, "update": 2})
         self.assertEqual(s["sync_seconds"], 150)
-        self.assertEqual(s["failures"],
-                         [{"phase": "sync", "error": "disk error"}])
+        self.assertEqual(s["failures"], [{"phase": "sync", "error": "disk error"}])
 
     def test_empty_history(self):
         s = report.summarize_history([])
@@ -399,26 +416,26 @@ class WeekAggregationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "history.jsonl")
             with open(path, "w") as f:
-                f.write(json.dumps(_hist(self.now, 1)) + "\n")     # in window
-                f.write(json.dumps(_hist(self.now, 8)) + "\n")     # too old
-                f.write("garbage not json\n")                      # malformed
+                f.write(json.dumps(_hist(self.now, 1)) + "\n")  # in window
+                f.write(json.dumps(_hist(self.now, 8)) + "\n")  # too old
+                f.write("garbage not json\n")  # malformed
             recs = report.read_history(path, now=self.now, days=7)
             self.assertEqual(len(recs), 1)
 
     def test_read_history_missing_file(self):
         self.assertEqual(report.read_history("", now=self.now), [])
-        self.assertEqual(
-            report.read_history("/no/such/file", now=self.now), [])
+        self.assertEqual(report.read_history("/no/such/file", now=self.now), [])
 
 
 class WeeklyTitleTest(unittest.TestCase):
     def test_all_ok(self):
         summary = report.summarize_history(
-            [_hist(datetime(2026, 7, 19, tzinfo=timezone.utc), i)
-             for i in range(7)])
+            [_hist(datetime(2026, 7, 19, tzinfo=timezone.utc), i) for i in range(7)]
+        )
         self.assertEqual(
             report.build_weekly_title(summary, warned=False),
-            "📊 SnapRAID weekly: 7 runs, all OK")
+            "📊 SnapRAID weekly: 7 runs, all OK",
+        )
 
     def test_some_failed(self):
         now = datetime(2026, 7, 19, tzinfo=timezone.utc)
@@ -427,60 +444,68 @@ class WeeklyTitleTest(unittest.TestCase):
         summary = report.summarize_history(recs)
         self.assertEqual(
             report.build_weekly_title(summary, warned=False),
-            "⚠️ SnapRAID weekly: 6/7 runs OK")
+            "⚠️ SnapRAID weekly: 6/7 runs OK",
+        )
 
     def test_warning_flips_emoji(self):
         summary = report.summarize_history(
-            [_hist(datetime(2026, 7, 19, tzinfo=timezone.utc), 0)])
+            [_hist(datetime(2026, 7, 19, tzinfo=timezone.utc), 0)]
+        )
         # All runs OK but a scrub-age warning was raised -> ⚠️ prefix.
-        self.assertTrue(
-            report.build_weekly_title(summary, warned=True).startswith("⚠️"))
+        self.assertTrue(report.build_weekly_title(summary, warned=True).startswith("⚠️"))
 
     def test_no_history(self):
         summary = report.summarize_history([])
         self.assertEqual(
             report.build_weekly_title(summary, warned=False),
-            "📊 SnapRAID weekly: no run history")
+            "📊 SnapRAID weekly: no run history",
+        )
 
 
 class WeeklyBodyTest(unittest.TestCase):
     def test_scrub_age_warning_prefix(self):
         s = report.parse_status(STATUS_FIXTURE)  # oldest 45d
         body = report.build_weekly_body(
-            report.summarize_history([]), s, scrub_age_warning=30)
+            report.summarize_history([]), s, scrub_age_warning=30
+        )
         self.assertIn("⚠️ Scrub age: oldest 45d · median 8d · newest 0d", body)
 
     def test_scrub_age_no_warning_when_under_threshold(self):
         s = report.parse_status(STATUS_FIXTURE)
         body = report.build_weekly_body(
-            report.summarize_history([]), s, scrub_age_warning=90)
+            report.summarize_history([]), s, scrub_age_warning=90
+        )
         self.assertIn("Scrub age: oldest 45d", body)
         self.assertNotIn("⚠️ Scrub age", body)
 
     def test_scrub_age_disabled(self):
         s = report.parse_status(STATUS_FIXTURE)
         body = report.build_weekly_body(
-            report.summarize_history([]), s, scrub_age_warning=0)
+            report.summarize_history([]), s, scrub_age_warning=0
+        )
         self.assertNotIn("⚠️", body)
 
     def test_health_and_fragmentation(self):
         s = report.parse_status(STATUS_FIXTURE)
         body = report.build_weekly_body(
-            report.summarize_history([]), s, scrub_age_warning=30)
+            report.summarize_history([]), s, scrub_age_warning=30
+        )
         self.assertIn("✅ No errors detected", body)
         self.assertIn("Fragmentation: 1323 excess fragments", body)
 
     def test_no_history_line(self):
         body = report.build_weekly_body(
-            report.summarize_history([]), report.parse_status(""),
-            scrub_age_warning=30)
+            report.summarize_history([]), report.parse_status(""), scrub_age_warning=30
+        )
         self.assertIn("No run history available.", body)
 
     def test_raw_status_fallback_only_when_empty_parse(self):
         empty = report.parse_status("weird unparseable output here")
         body = report.build_weekly_body(
-            report.summarize_history([]), empty,
-            raw_status="weird unparseable output here")
+            report.summarize_history([]),
+            empty,
+            raw_status="weird unparseable output here",
+        )
         self.assertIn("weird unparseable output here", body)
 
 
@@ -521,22 +546,23 @@ class NotificationAttachmentTest(unittest.TestCase):
 
     def setUp(self):
         self.sr = snapraid_runner
-        self._saved = {k: getattr(self.sr, k) for k in
-                       ("config", "run_report", "notification_log",
-                        "full_capture")}
+        self._saved = {
+            k: getattr(self.sr, k)
+            for k in ("config", "run_report", "notification_log", "full_capture")
+        }
         self._saved_apprise = sys.modules.get("apprise")
 
         self.calls = []
         sys.modules["apprise"] = _fake_apprise(self.calls)
 
         self.sr.config = {
-            "notification": {"short": True, "enabled": True,
-                             "config": "/dev/null"},
+            "notification": {"short": True, "enabled": True, "config": "/dev/null"},
         }
         self.sr.notification_log = StringIO("high level log\n")
         self.sr.full_capture = StringIO(
             "2026-07-19 [OUTPUT] scanning disk d1: 102842 files\n"
-            "2026-07-19 [OUTERR] snapraid: fatal: unable to read parity\n")
+            "2026-07-19 [OUTERR] snapraid: fatal: unable to read parity\n"
+        )
 
     def tearDown(self):
         for k, v in self._saved.items():
@@ -548,15 +574,16 @@ class NotificationAttachmentTest(unittest.TestCase):
 
     def test_failure_attaches_full_log(self):
         self.sr.run_report = make_report(
-            success=False, failed_phase="sync",
-            error="snapraid: fatal: unable to read parity")
+            success=False,
+            failed_phase="sync",
+            error="snapraid: fatal: unable to read parity",
+        )
         self.sr.send_notification(False)
 
         self.assertEqual(len(self.calls), 1)
         call = self.calls[0]
         self.assertIsNotNone(call["attach"])
-        self.assertRegex(
-            call["_basename"], r"^snapraid-runner-\d{8}-\d{6}\.log$")
+        self.assertRegex(call["_basename"], r"^snapraid-runner-\d{8}-\d{6}\.log$")
         # The full OUTPUT/OUTERR detail lives in the attachment, not the body.
         self.assertIn("[OUTPUT] scanning disk d1", call["_content"])
         self.assertIn("[OUTERR] snapraid: fatal", call["_content"])
@@ -574,7 +601,8 @@ class NotificationAttachmentTest(unittest.TestCase):
         # If building the attachment fails, the error notification still goes
         # out (without the attachment) rather than being lost.
         self.sr.run_report = make_report(
-            success=False, failed_phase="sync", error="boom")
+            success=False, failed_phase="sync", error="boom"
+        )
 
         def boom(*a, **k):
             raise OSError("no tmp")

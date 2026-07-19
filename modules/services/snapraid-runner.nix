@@ -4,12 +4,11 @@
   pkgs,
   ...
 }:
-with lib; let
+with lib;
+let
   cfg = config.services.snapraid-runner;
   loggingOption =
-    if cfg.logging.file == null
-    then overrideExisting cfg.logging {file = "";}
-    else cfg.logging;
+    if cfg.logging.file == null then overrideExisting cfg.logging { file = ""; } else cfg.logging;
 
   # Shared hardening for both the runner and the weekly-report units. ExecStart
   # differs, so it is merged in per-service.
@@ -48,15 +47,16 @@ with lib; let
       let
         contentDirs = map dirOf config.services.snapraid.contentFiles;
       in
-        unique (
-          attrValues config.services.snapraid.dataDisks
-          ++ contentDirs
-          ++ config.services.snapraid.parityFiles
-          ++ optional (cfg.logging.file != null) (dirOf cfg.logging.file)
-          ++ optional (cfg.history.file != null) (dirOf cfg.history.file)
-        );
+      unique (
+        attrValues config.services.snapraid.dataDisks
+        ++ contentDirs
+        ++ config.services.snapraid.parityFiles
+        ++ optional (cfg.logging.file != null) (dirOf cfg.logging.file)
+        ++ optional (cfg.history.file != null) (dirOf cfg.history.file)
+      );
   };
-in {
+in
+{
   options.services.snapraid-runner = with types; {
     enable = mkEnableOption "snapraid-runner service";
     interval = mkOption {
@@ -214,56 +214,47 @@ in {
         snapraid-runner
       ];
 
-      etc =
-        {
-          "snapraid-runner.conf".text = generators.toINI {} {
-            snapraid = cfg.snapraid;
-            logging = loggingOption;
-            # Python reads `enabled`; the NixOS option is `enable` (convention).
-            notification =
-              removeAttrs cfg.notification ["enable"]
-              // {enabled = cfg.notification.enable;};
-            scrub = cfg.scrub;
-            # Empty string disables history, matching logging.file null-handling.
-            history.file =
-              if cfg.history.file == null
-              then ""
-              else cfg.history.file;
-            # Only scrub-age-warning is read from [report]; interval/enable
-            # drive the systemd timer, not the Python.
-            report."scrub-age-warning" = cfg.report.scrub-age-warning;
+      etc = {
+        "snapraid-runner.conf".text = generators.toINI { } {
+          snapraid = cfg.snapraid;
+          logging = loggingOption;
+          # Python reads `enabled`; the NixOS option is `enable` (convention).
+          notification = removeAttrs cfg.notification [ "enable" ] // {
+            enabled = cfg.notification.enable;
           };
-        }
-        // optionalAttrs (cfg.apprise-conf != null) {
-          "snapraid-runner.apprise.yaml".text = generators.toYAML {} cfg.apprise-conf;
-        };
-    };
-
-    systemd.services =
-      {
-        # disable snapraid services
-        snapraid-scrub.enable = mkForce false;
-        snapraid-sync.enable = mkForce false;
-        snapraid-runner = {
-          description = "Diff, Sync and Scrub the SnapRAID array via snapraid-runner";
-          startAt = cfg.interval;
-          serviceConfig =
-            sharedServiceConfig
-            // {
-              ExecStart = "${pkgs.snapraid-runner}/bin/snapraid-runner -c /etc/snapraid-runner.conf";
-            };
+          scrub = cfg.scrub;
+          # Empty string disables history, matching logging.file null-handling.
+          history.file = if cfg.history.file == null then "" else cfg.history.file;
+          # Only scrub-age-warning is read from [report]; interval/enable
+          # drive the systemd timer, not the Python.
+          report."scrub-age-warning" = cfg.report.scrub-age-warning;
         };
       }
-      // optionalAttrs cfg.report.enable {
-        snapraid-runner-report = {
-          description = "Send the SnapRAID weekly report via snapraid-runner";
-          startAt = cfg.report.interval;
-          serviceConfig =
-            sharedServiceConfig
-            // {
-              ExecStart = "${pkgs.snapraid-runner}/bin/snapraid-runner -c /etc/snapraid-runner.conf --report weekly";
-            };
+      // optionalAttrs (cfg.apprise-conf != null) {
+        "snapraid-runner.apprise.yaml".text = generators.toYAML { } cfg.apprise-conf;
+      };
+    };
+
+    systemd.services = {
+      # disable snapraid services
+      snapraid-scrub.enable = mkForce false;
+      snapraid-sync.enable = mkForce false;
+      snapraid-runner = {
+        description = "Diff, Sync and Scrub the SnapRAID array via snapraid-runner";
+        startAt = cfg.interval;
+        serviceConfig = sharedServiceConfig // {
+          ExecStart = "${pkgs.snapraid-runner}/bin/snapraid-runner -c /etc/snapraid-runner.conf";
         };
       };
+    }
+    // optionalAttrs cfg.report.enable {
+      snapraid-runner-report = {
+        description = "Send the SnapRAID weekly report via snapraid-runner";
+        startAt = cfg.report.interval;
+        serviceConfig = sharedServiceConfig // {
+          ExecStart = "${pkgs.snapraid-runner}/bin/snapraid-runner -c /etc/snapraid-runner.conf --report weekly";
+        };
+      };
+    };
   };
 }
